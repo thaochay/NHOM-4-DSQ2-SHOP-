@@ -1,9 +1,14 @@
--- Database AE SHOP
+-- ========== AE SHOP - FULL DATABASE (Complete) ==========
 CREATE DATABASE IF NOT EXISTS ae_shop CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE ae_shop;
 
--- Bảng người dùng
-CREATE TABLE nguoi_dung (
+-- DROP existing tables (optional, an toàn) - nếu muốn làm mới hoàn toàn, bật các dòng DROP bên dưới.
+-- SET FOREIGN_KEY_CHECKS = 0;
+-- DROP TABLE IF EXISTS wishlist, shipping_methods, luong_ton_kho, user_roles, roles, settings, san_pham_tag, tags, lich_su_don_hang, san_pham_trong_gio_hang, gio_hang, danh_gia, thanh_toan, phuong_thuc_thanh_toan, chi_tiet_don_hang, don_hang, theo_doi_ma_giam_gia, ma_giam_gia, chi_tiet_phieu_nhap, phieu_nhap, chi_tiet_san_pham, anh_san_pham, san_pham, nha_cung_cap, menu, danh_muc, dia_chi, nguoi_dung;
+-- SET FOREIGN_KEY_CHECKS = 1;
+
+-- TABLE: nguoi_dung (users)
+CREATE TABLE IF NOT EXISTS nguoi_dung (
   id_nguoi_dung INT AUTO_INCREMENT PRIMARY KEY,
   ten VARCHAR(150) NOT NULL,
   email VARCHAR(200) NOT NULL UNIQUE,
@@ -13,11 +18,12 @@ CREATE TABLE nguoi_dung (
   gioi_tinh VARCHAR(20),
   is_admin TINYINT(1) DEFAULT 0,
   trang_thai TINYINT(1) DEFAULT 1,
+  last_login DATETIME NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Bảng địa chỉ người dùng
-CREATE TABLE dia_chi (
+-- TABLE: dia_chi (addresses)
+CREATE TABLE IF NOT EXISTS dia_chi (
   id_dia_chi INT AUTO_INCREMENT PRIMARY KEY,
   id_nguoi_dung INT,
   ho_ten VARCHAR(150),
@@ -28,32 +34,34 @@ CREATE TABLE dia_chi (
   tinh_thanh VARCHAR(150),
   mac_dinh TINYINT(1) DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (id_nguoi_dung) REFERENCES nguoi_dung(id_nguoi_dung) ON DELETE SET NULL
-);
+  CONSTRAINT fk_diachi_nguoidung FOREIGN KEY (id_nguoi_dung) REFERENCES nguoi_dung(id_nguoi_dung) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Danh mục / category
-CREATE TABLE danh_muc (
+-- TABLE: danh_muc (categories)
+CREATE TABLE IF NOT EXISTS danh_muc (
   id_danh_muc INT AUTO_INCREMENT PRIMARY KEY,
   ten VARCHAR(150) NOT NULL,
   slug VARCHAR(200) NULL,
   mo_ta TEXT,
   trang_thai TINYINT(1) DEFAULT 1,
-  thu_tu INT DEFAULT 0
-);
+  thu_tu INT DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Menu (nếu bạn cần menu động)
-CREATE TABLE menu (
+-- TABLE: menu (references danh_muc)
+CREATE TABLE IF NOT EXISTS menu (
   id_menu INT AUTO_INCREMENT PRIMARY KEY,
   ten VARCHAR(150),
   duong_dan VARCHAR(255),
   vi_tri VARCHAR(50),
   id_danh_muc INT NULL,
   trang_thai TINYINT(1) DEFAULT 1,
-  FOREIGN KEY (id_danh_muc) REFERENCES danh_muc(id_danh_muc) ON DELETE SET NULL
-);
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_menu_danhmuc FOREIGN KEY (id_danh_muc) REFERENCES danh_muc(id_danh_muc) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Nhà cung cấp
-CREATE TABLE nha_cung_cap (
+-- TABLE: nha_cung_cap (suppliers)
+CREATE TABLE IF NOT EXISTS nha_cung_cap (
   id_ncc INT AUTO_INCREMENT PRIMARY KEY,
   ten VARCHAR(200) NOT NULL,
   dien_thoai VARCHAR(50),
@@ -61,10 +69,10 @@ CREATE TABLE nha_cung_cap (
   dia_chi TEXT,
   trang_thai TINYINT(1) DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Sản phẩm
-CREATE TABLE san_pham (
+-- TABLE: san_pham (products)
+CREATE TABLE IF NOT EXISTS san_pham (
   id_san_pham INT AUTO_INCREMENT PRIMARY KEY,
   ma_san_pham VARCHAR(100) UNIQUE,
   ten VARCHAR(255) NOT NULL,
@@ -75,24 +83,25 @@ CREATE TABLE san_pham (
   gia_cu DECIMAL(12,2) DEFAULT NULL,
   so_luong INT DEFAULT 0,
   trang_thai TINYINT(1) DEFAULT 1,
+  so_da_ban INT DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (id_danh_muc) REFERENCES danh_muc(id_danh_muc) ON DELETE SET NULL,
-  FOREIGN KEY (id_ncc) REFERENCES nha_cung_cap(id_ncc) ON DELETE SET NULL
-);
+  CONSTRAINT fk_sanpham_danhmuc FOREIGN KEY (id_danh_muc) REFERENCES danh_muc(id_danh_muc) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT fk_sanpham_ncc FOREIGN KEY (id_ncc) REFERENCES nha_cung_cap(id_ncc) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Ảnh sản phẩm
-CREATE TABLE anh_san_pham (
+-- TABLE: anh_san_pham (product images)
+CREATE TABLE IF NOT EXISTS anh_san_pham (
   id_anh INT AUTO_INCREMENT PRIMARY KEY,
   id_san_pham INT,
   duong_dan VARCHAR(255),
   la_anh_chinh TINYINT(1) DEFAULT 0,
   thu_tu INT DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (id_san_pham) REFERENCES san_pham(id_san_pham) ON DELETE CASCADE
-);
+  CONSTRAINT fk_anh_sanpham FOREIGN KEY (id_san_pham) REFERENCES san_pham(id_san_pham) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Chi tiết sản phẩm (size, màu, chất liệu...)
-CREATE TABLE chi_tiet_san_pham (
+-- TABLE: chi_tiet_san_pham (product variants)
+CREATE TABLE IF NOT EXISTS chi_tiet_san_pham (
   id_chi_tiet INT AUTO_INCREMENT PRIMARY KEY,
   id_san_pham INT,
   sku VARCHAR(100) DEFAULT NULL,
@@ -102,11 +111,12 @@ CREATE TABLE chi_tiet_san_pham (
   so_luong INT DEFAULT 0,
   gia DECIMAL(12,2) DEFAULT NULL,
   trang_thai TINYINT(1) DEFAULT 1,
-  FOREIGN KEY (id_san_pham) REFERENCES san_pham(id_san_pham) ON DELETE CASCADE
-);
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_chitiet_sanpham FOREIGN KEY (id_san_pham) REFERENCES san_pham(id_san_pham) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Phiếu nhập (nhập hàng)
-CREATE TABLE phieu_nhap (
+-- TABLE: phieu_nhap (purchase receipts)
+CREATE TABLE IF NOT EXISTS phieu_nhap (
   id_phieu_nhap INT AUTO_INCREMENT PRIMARY KEY,
   ma_phieu VARCHAR(100) UNIQUE,
   id_ncc INT,
@@ -114,24 +124,24 @@ CREATE TABLE phieu_nhap (
   tong_tien DECIMAL(14,2) DEFAULT 0,
   ghi_chu TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (id_ncc) REFERENCES nha_cung_cap(id_ncc) ON DELETE SET NULL
-);
+  CONSTRAINT fk_pn_ncc FOREIGN KEY (id_ncc) REFERENCES nha_cung_cap(id_ncc) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Chi tiết phiếu nhập (sản phẩm nhập)
-CREATE TABLE chi_tiet_phieu_nhap (
+-- TABLE: chi_tiet_phieu_nhap
+CREATE TABLE IF NOT EXISTS chi_tiet_phieu_nhap (
   id_ctpn INT AUTO_INCREMENT PRIMARY KEY,
   id_phieu_nhap INT,
   id_san_pham INT,
   id_chi_tiet INT NULL,
   so_luong INT,
   gia_mua DECIMAL(12,2),
-  FOREIGN KEY (id_phieu_nhap) REFERENCES phieu_nhap(id_phieu_nhap) ON DELETE CASCADE,
-  FOREIGN KEY (id_san_pham) REFERENCES san_pham(id_san_pham) ON DELETE SET NULL,
-  FOREIGN KEY (id_chi_tiet) REFERENCES chi_tiet_san_pham(id_chi_tiet) ON DELETE SET NULL
-);
+  CONSTRAINT fk_ctpn_pn FOREIGN KEY (id_phieu_nhap) REFERENCES phieu_nhap(id_phieu_nhap) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_ctpn_sp FOREIGN KEY (id_san_pham) REFERENCES san_pham(id_san_pham) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT fk_ctpn_ct FOREIGN KEY (id_chi_tiet) REFERENCES chi_tiet_san_pham(id_chi_tiet) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Mã giảm giá
-CREATE TABLE ma_giam_gia (
+-- TABLE: ma_giam_gia (coupons)
+CREATE TABLE IF NOT EXISTS ma_giam_gia (
   id_ma_giam_gia INT AUTO_INCREMENT PRIMARY KEY,
   ma VARCHAR(100) UNIQUE,
   loai VARCHAR(50) DEFAULT 'phan_tram',
@@ -143,22 +153,22 @@ CREATE TABLE ma_giam_gia (
   ngay_ket_thuc DATE,
   trang_thai TINYINT(1) DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Bảng theo dõi mã giảm giá (ai đã dùng)
-CREATE TABLE theo_doi_ma_giam_gia (
+-- TABLE: theo_doi_ma_giam_gia (coupon uses)
+CREATE TABLE IF NOT EXISTS theo_doi_ma_giam_gia (
   id INT AUTO_INCREMENT PRIMARY KEY,
   id_ma_giam_gia INT,
   id_nguoi_dung INT,
   ma_su_dung VARCHAR(100),
   ngay_su_dung TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   so_tien_giam DECIMAL(12,2) DEFAULT 0,
-  FOREIGN KEY (id_ma_giam_gia) REFERENCES ma_giam_gia(id_ma_giam_gia) ON DELETE CASCADE,
-  FOREIGN KEY (id_nguoi_dung) REFERENCES nguoi_dung(id_nguoi_dung) ON DELETE SET NULL
-);
+  CONSTRAINT fk_tdmg_mg FOREIGN KEY (id_ma_giam_gia) REFERENCES ma_giam_gia(id_ma_giam_gia) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_tdmg_user FOREIGN KEY (id_nguoi_dung) REFERENCES nguoi_dung(id_nguoi_dung) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Đơn hàng
-CREATE TABLE don_hang (
+-- TABLE: don_hang (orders)
+CREATE TABLE IF NOT EXISTS don_hang (
   id_don_hang INT AUTO_INCREMENT PRIMARY KEY,
   ma_don VARCHAR(100) UNIQUE,
   id_nguoi_dung INT,
@@ -169,13 +179,13 @@ CREATE TABLE don_hang (
   phi_van_chuyen DECIMAL(12,2) DEFAULT 0,
   ngay_dat DATETIME DEFAULT CURRENT_TIMESTAMP,
   ghi_chu TEXT,
-  FOREIGN KEY (id_nguoi_dung) REFERENCES nguoi_dung(id_nguoi_dung) ON DELETE SET NULL,
-  FOREIGN KEY (id_dia_chi) REFERENCES dia_chi(id_dia_chi) ON DELETE SET NULL,
-  FOREIGN KEY (id_ma_giam_gia) REFERENCES ma_giam_gia(id_ma_giam_gia) ON DELETE SET NULL
-);
+  CONSTRAINT fk_dh_user FOREIGN KEY (id_nguoi_dung) REFERENCES nguoi_dung(id_nguoi_dung) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT fk_dh_diachi FOREIGN KEY (id_dia_chi) REFERENCES dia_chi(id_dia_chi) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT fk_dh_mg FOREIGN KEY (id_ma_giam_gia) REFERENCES ma_giam_gia(id_ma_giam_gia) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Chi tiết đơn hàng
-CREATE TABLE chi_tiet_don_hang (
+-- TABLE: chi_tiet_don_hang (order items)
+CREATE TABLE IF NOT EXISTS chi_tiet_don_hang (
   id_ctdh INT AUTO_INCREMENT PRIMARY KEY,
   id_don_hang INT,
   id_san_pham INT,
@@ -183,21 +193,22 @@ CREATE TABLE chi_tiet_don_hang (
   so_luong INT,
   gia DECIMAL(12,2),
   thanh_tien DECIMAL(14,2),
-  FOREIGN KEY (id_don_hang) REFERENCES don_hang(id_don_hang) ON DELETE CASCADE,
-  FOREIGN KEY (id_san_pham) REFERENCES san_pham(id_san_pham) ON DELETE SET NULL,
-  FOREIGN KEY (id_chi_tiet) REFERENCES chi_tiet_san_pham(id_chi_tiet) ON DELETE SET NULL
-);
+  CONSTRAINT fk_ctdh_dh FOREIGN KEY (id_don_hang) REFERENCES don_hang(id_don_hang) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_ctdh_sp FOREIGN KEY (id_san_pham) REFERENCES san_pham(id_san_pham) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT fk_ctdh_ct FOREIGN KEY (id_chi_tiet) REFERENCES chi_tiet_san_pham(id_chi_tiet) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Phương thức thanh toán
-CREATE TABLE phuong_thuc_thanh_toan (
+-- TABLE: phuong_thuc_thanh_toan (payment methods)
+CREATE TABLE IF NOT EXISTS phuong_thuc_thanh_toan (
   id_pttt INT AUTO_INCREMENT PRIMARY KEY,
   ten VARCHAR(150),
   mo_ta VARCHAR(255),
-  trang_thai TINYINT(1) DEFAULT 1
-);
+  trang_thai TINYINT(1) DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Thanh toán (ghi nhận giao dịch)
-CREATE TABLE thanh_toan (
+-- TABLE: thanh_toan (payments)
+CREATE TABLE IF NOT EXISTS thanh_toan (
   id_thanh_toan INT AUTO_INCREMENT PRIMARY KEY,
   id_don_hang INT,
   id_pttt INT,
@@ -205,12 +216,12 @@ CREATE TABLE thanh_toan (
   trang_thai VARCHAR(50) DEFAULT 'cho_xu_ly',
   ngay_thanh_toan DATETIME DEFAULT CURRENT_TIMESTAMP,
   thong_tin_phu TEXT,
-  FOREIGN KEY (id_don_hang) REFERENCES don_hang(id_don_hang) ON DELETE CASCADE,
-  FOREIGN KEY (id_pttt) REFERENCES phuong_thuc_thanh_toan(id_pttt) ON DELETE SET NULL
-);
+  CONSTRAINT fk_tt_dh FOREIGN KEY (id_don_hang) REFERENCES don_hang(id_don_hang) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_tt_pttt FOREIGN KEY (id_pttt) REFERENCES phuong_thuc_thanh_toan(id_pttt) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Đánh giá sản phẩm
-CREATE TABLE danh_gia (
+-- TABLE: danh_gia (reviews)
+CREATE TABLE IF NOT EXISTS danh_gia (
   id_danh_gia INT AUTO_INCREMENT PRIMARY KEY,
   id_nguoi_dung INT,
   id_san_pham INT,
@@ -218,22 +229,22 @@ CREATE TABLE danh_gia (
   binh_luan TEXT,
   ngay_danh_gia TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   trang_thai TINYINT(1) DEFAULT 1,
-  FOREIGN KEY (id_nguoi_dung) REFERENCES nguoi_dung(id_nguoi_dung) ON DELETE SET NULL,
-  FOREIGN KEY (id_san_pham) REFERENCES san_pham(id_san_pham) ON DELETE CASCADE
-);
+  CONSTRAINT fk_dg_user FOREIGN KEY (id_nguoi_dung) REFERENCES nguoi_dung(id_nguoi_dung) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT fk_dg_sp FOREIGN KEY (id_san_pham) REFERENCES san_pham(id_san_pham) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Giỏ hàng tạm
-CREATE TABLE gio_hang (
+-- TABLE: gio_hang (cart sessions)
+CREATE TABLE IF NOT EXISTS gio_hang (
   id_gio_hang INT AUTO_INCREMENT PRIMARY KEY,
   id_nguoi_dung INT NULL,
   session_id VARCHAR(255) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NULL,
-  FOREIGN KEY (id_nguoi_dung) REFERENCES nguoi_dung(id_nguoi_dung) ON DELETE SET NULL
-);
+  CONSTRAINT fk_giohang_user FOREIGN KEY (id_nguoi_dung) REFERENCES nguoi_dung(id_nguoi_dung) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Sản phẩm trong giỏ hàng
-CREATE TABLE san_pham_trong_gio_hang (
+-- TABLE: san_pham_trong_gio_hang (cart items)
+CREATE TABLE IF NOT EXISTS san_pham_trong_gio_hang (
   id_item INT AUTO_INCREMENT PRIMARY KEY,
   id_gio_hang INT,
   id_san_pham INT,
@@ -241,62 +252,163 @@ CREATE TABLE san_pham_trong_gio_hang (
   so_luong INT DEFAULT 1,
   gia DECIMAL(12,2),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (id_gio_hang) REFERENCES gio_hang(id_gio_hang) ON DELETE CASCADE,
-  FOREIGN KEY (id_san_pham) REFERENCES san_pham(id_san_pham) ON DELETE SET NULL,
-  FOREIGN KEY (id_chi_tiet) REFERENCES chi_tiet_san_pham(id_chi_tiet) ON DELETE SET NULL
-);
+  CONSTRAINT fk_sptgh_giohang FOREIGN KEY (id_gio_hang) REFERENCES gio_hang(id_gio_hang) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_sptgh_sp FOREIGN KEY (id_san_pham) REFERENCES san_pham(id_san_pham) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT fk_sptgh_ct FOREIGN KEY (id_chi_tiet) REFERENCES chi_tiet_san_pham(id_chi_tiet) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Lịch sử đơn hàng
-CREATE TABLE lich_su_don_hang (
+-- TABLE: lich_su_don_hang (order status history)
+CREATE TABLE IF NOT EXISTS lich_su_don_hang (
   id_log INT AUTO_INCREMENT PRIMARY KEY,
   id_don_hang INT,
   trang_thai_cu VARCHAR(100),
   trang_thai_moi VARCHAR(100),
   ghi_chu TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (id_don_hang) REFERENCES don_hang(id_don_hang) ON DELETE CASCADE
-);
+  CONSTRAINT fk_ls_dh FOREIGN KEY (id_don_hang) REFERENCES don_hang(id_don_hang) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Indexes
-CREATE INDEX idx_sanpham_danhmuc ON san_pham(id_danh_muc);
-CREATE INDEX idx_chitiet_sanpham_sku ON chi_tiet_san_pham(sku);
-CREATE INDEX idx_donhang_user ON don_hang(id_nguoi_dung);
+-- INDEXES
+CREATE INDEX IF NOT EXISTS idx_sanpham_danhmuc ON san_pham(id_danh_muc);
+CREATE INDEX IF NOT EXISTS idx_chitiet_sanpham_sku ON chi_tiet_san_pham(sku);
+CREATE INDEX IF NOT EXISTS idx_donhang_user ON don_hang(id_nguoi_dung);
 
--- Một vài bản ghi demo
+-- TAGS & RELATION
+CREATE TABLE IF NOT EXISTS tags (
+  id_tag INT AUTO_INCREMENT PRIMARY KEY,
+  ten VARCHAR(150),
+  slug VARCHAR(200),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS san_pham_tag (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  id_san_pham INT,
+  id_tag INT,
+  CONSTRAINT fk_sptag_sp FOREIGN KEY (id_san_pham) REFERENCES san_pham(id_san_pham) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_sptag_tag FOREIGN KEY (id_tag) REFERENCES tags(id_tag) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- SETTINGS (site config)
+CREATE TABLE IF NOT EXISTS settings (
+  `key` VARCHAR(100) PRIMARY KEY,
+  `value` TEXT,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ROLES & USER ROLES
+CREATE TABLE IF NOT EXISTS roles (
+  id_role INT AUTO_INCREMENT PRIMARY KEY,
+  ten VARCHAR(100),
+  mo_ta VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS user_roles (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  id_nguoi_dung INT,
+  id_role INT,
+  CONSTRAINT fk_userroles_user FOREIGN KEY (id_nguoi_dung) REFERENCES nguoi_dung(id_nguoi_dung) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_userroles_role FOREIGN KEY (id_role) REFERENCES roles(id_role) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ADDITIONAL TABLES (optional but useful)
+CREATE TABLE IF NOT EXISTS luong_ton_kho (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  id_san_pham INT,
+  id_chi_tiet INT NULL,
+  loai VARCHAR(50),
+  so_luong INT,
+  ghi_chu TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_ltk_sp FOREIGN KEY (id_san_pham) REFERENCES san_pham(id_san_pham) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT fk_ltk_ct FOREIGN KEY (id_chi_tiet) REFERENCES chi_tiet_san_pham(id_chi_tiet) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS shipping_methods (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  ten VARCHAR(150),
+  mo_ta VARCHAR(255),
+  phi_mac_dinh DECIMAL(12,2) DEFAULT 0,
+  trang_thai TINYINT(1) DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS wishlist (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  id_nguoi_dung INT,
+  id_san_pham INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_wl_user FOREIGN KEY (id_nguoi_dung) REFERENCES nguoi_dung(id_nguoi_dung) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_wl_sp FOREIGN KEY (id_san_pham) REFERENCES san_pham(id_san_pham) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- ========== SAMPLE DATA (cập nhật chuẩn theo yêu cầu) ==========
+-- An toàn khi truncate / chèn: tắt FK checks, truncate các bảng con trước menu -> danh_muc
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- Truncate các bảng có thể chứa dữ liệu cũ (thực hiện khi bạn muốn reset DB)
+TRUNCATE TABLE menu;
+TRUNCATE TABLE anh_san_pham;
+TRUNCATE TABLE san_pham_tag;
+TRUNCATE TABLE tags;
+TRUNCATE TABLE san_pham;
+TRUNCATE TABLE nha_cung_cap;
+TRUNCATE TABLE danh_muc;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- Chèn danh mục (5 loại)
 INSERT INTO danh_muc (ten, slug, mo_ta, trang_thai, thu_tu) VALUES
 ('Áo Khoác','ao-khoac','Danh mục áo khoác',1,1),
-('Áo Thun','ao-thun','Danh mục áo thun',1,2),
-('Quần Jeans','quan-jeans','Danh mục quần jeans',1,3);
+('Áo Nỉ Trơn','ao-ni-tron','Danh mục áo nỉ / hoodie trơn',1,2),
+('Áo Bomber','ao-bomber','Danh mục áo bomber',1,3),
+('Quần Jean','quan-jean','Danh mục quần jean',1,4),
+('Sơ Mi Dài Tay','so-mi-dai-tay','Danh mục sơ mi dài tay',1,5);
 
+-- Suppliers
 INSERT INTO nha_cung_cap (ten, dien_thoai, email, dia_chi) VALUES
 ('NCC A','0123456789','nccA@example.com','Hà Nội'),
 ('NCC B','0987654321','nccB@example.com','TP HCM');
 
+-- Products: 5 sản phẩm tương ứng 5 danh mục
 INSERT INTO san_pham (ma_san_pham, ten, id_danh_muc, id_ncc, mo_ta, gia, gia_cu, so_luong, trang_thai) VALUES
-('AEJ001','Áo khoác kaki nam','1',1,'Áo khoác kaki form chuẩn',799000,999000,20,1),
-('AET002','Áo phông cotton basic','2',2,'Áo phông 100% cotton',219000,259000,50,1),
-('AEJ003','Quần jeans xanh','3',1,'Jeans nam co giãn',499000,NULL,30,1);
+('AK001','Áo khoác kaki nam', (SELECT id_danh_muc FROM danh_muc WHERE slug='ao-khoac'),1,'Áo khoác kaki form chuẩn, chất liệu dày dặn',799000,999000,25,1),
+('AN001','Áo nỉ trơn basic', (SELECT id_danh_muc FROM danh_muc WHERE slug='ao-ni-tron'),1,'Áo nỉ trơn chất liệu cotton dày 2 lớp',359000,459000,40,1),
+('AB001','Áo bomber nam', (SELECT id_danh_muc FROM danh_muc WHERE slug='ao-bomber'),2,'Bomber nam, form rộng, lớp lót ấm',599000,699000,30,1),
+('QJ001','Quần jean nam slimfit', (SELECT id_danh_muc FROM danh_muc WHERE slug='quan-jean'),1,'Quần jean co giãn, màu xanh đậm',499000,NULL,50,1),
+('SM001','Sơ mi dài tay nam', (SELECT id_danh_muc FROM danh_muc WHERE slug='so-mi-dai-tay'),2,'Sơ mi dài tay form regular, thoáng mát',329000,429000,35,1);
 
+-- Product images: lưu đường dẫn tương đối (bạn đặt file vào folder images/products/...)
 INSERT INTO anh_san_pham (id_san_pham, duong_dan, la_anh_chinh) VALUES
-(1,'images/ao_khoac1.jpg',1),
-(2,'images/ao_phong1.jpg',1),
-(3,'images/quan_jeans1.jpg',1);
+((SELECT id_san_pham FROM san_pham WHERE ma_san_pham='AK001'),'images/products/ao-khoac/aokhoac.jpg',1),
+((SELECT id_san_pham FROM san_pham WHERE ma_san_pham='AN001'),'images/products/ao-ni/aonitron.jpg',1),
+((SELECT id_san_pham FROM san_pham WHERE ma_san_pham='AB001'),'images/products/bomber/bomber.jpg',1),
+((SELECT id_san_pham FROM san_pham WHERE ma_san_pham='QJ001'),'images/products/quan-jean/quanjean.png',1),
+((SELECT id_san_pham FROM san_pham WHERE ma_san_pham='SM001'),'images/products/so-mi/somidaitay.png',1);
 
+-- Payment methods
 INSERT INTO phuong_thuc_thanh_toan (ten, mo_ta) VALUES ('Thanh toán khi nhận hàng','COD'),('Chuyển khoản ngân hàng','Bank transfer');
 
--- Tags demo
-CREATE TABLE tags (id_tag INT AUTO_INCREMENT PRIMARY KEY, ten VARCHAR(150), slug VARCHAR(200));
-CREATE TABLE san_pham_tag (id INT AUTO_INCREMENT PRIMARY KEY, id_san_pham INT, id_tag INT, FOREIGN KEY (id_san_pham) REFERENCES san_pham(id_san_pham) ON DELETE CASCADE, FOREIGN KEY (id_tag) REFERENCES tags(id_tag) ON DELETE CASCADE);
+-- Tags & product-tag
 INSERT INTO tags (ten, slug) VALUES ('Thời trang nam','thoi-trang-nam'),('Hàng mới','hang-moi');
-INSERT INTO san_pham_tag (id_san_pham, id_tag) VALUES (1,1),(2,1),(1,2);
+INSERT INTO san_pham_tag (id_san_pham, id_tag) VALUES
+((SELECT id_san_pham FROM san_pham WHERE ma_san_pham='AK001'), (SELECT id_tag FROM tags WHERE slug='thoi-trang-nam')),
+((SELECT id_san_pham FROM san_pham WHERE ma_san_pham='AN001'), (SELECT id_tag FROM tags WHERE slug='thoi-trang-nam')),
+((SELECT id_san_pham FROM san_pham WHERE ma_san_pham='AK001'), (SELECT id_tag FROM tags WHERE slug='hang-moi'));
 
--- Settings (site)
-CREATE TABLE settings (`key` VARCHAR(100) PRIMARY KEY, `value` TEXT, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
-INSERT INTO settings (`key`, `value`) VALUES ('site_name','AE SHOP'), ('currency','VND'),('phone','0123456789'),('address','Hà Nội, VN');
+-- Settings
+INSERT INTO settings (`key`,`value`) VALUES
+('site_name','AE SHOP'),('currency','VND'),('phone','0123456789'),('address','Hà Nội, VN')
+ON DUPLICATE KEY UPDATE `value` = VALUES(`value`);
 
--- Bảng bổ sung an toàn
-CREATE TABLE roles (id_role INT AUTO_INCREMENT PRIMARY KEY, ten VARCHAR(100), mo_ta VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE user_roles (id INT AUTO_INCREMENT PRIMARY KEY, id_nguoi_dung INT, id_role INT, FOREIGN KEY (id_nguoi_dung) REFERENCES nguoi_dung(id_nguoi_dung) ON DELETE CASCADE, FOREIGN KEY (id_role) REFERENCES roles(id_role) ON DELETE CASCADE);
+-- Roles
 INSERT INTO roles (ten, mo_ta) VALUES ('Super Admin','Toàn quyền'),('Admin','Quản lý sản phẩm và đơn hàng');
 
--- Bạn đã có dữ liệu demo cơ bản, kết thúc SQL.
+-- OPTIONAL: tạo menu (tham chiếu danh_muc)
+INSERT INTO menu (ten, duong_dan, vi_tri, id_danh_muc) VALUES
+('Áo Khoác','/ae_shop/category.php?slug=ao-khoac','top', (SELECT id_danh_muc FROM danh_muc WHERE slug='ao-khoac')),
+('Áo Nỉ','/ae_shop/category.php?slug=ao-ni-tron','top', (SELECT id_danh_muc FROM danh_muc WHERE slug='ao-ni-tron'));
+
+-- ========== END OF SQL ==========
