@@ -1,284 +1,256 @@
 <?php
-// index.php (full - header cải tiến, megamenu danh mục đẹp hơn, mini-cart dropdown)
-// Yêu cầu: db.php, inc/helpers.php, assets/css/style.css, assets/js/main.js
+// index.php - Trang chủ (sửa, gọn & ổn định)
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/inc/helpers.php';
 
-// load danh mục + featured + promos + latest
-$cats = $conn->query("SELECT * FROM danh_muc WHERE trang_thai=1 ORDER BY thu_tu ASC")->fetchAll();
-$featuredCats = array_slice($cats, 0, 6);
+/* fallback helpers nếu inc/helpers.php thiếu */
+if (!function_exists('esc')) {
+    function esc($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+}
+if (!function_exists('price')) {
+    function price($v){ return number_format((float)$v,0,',','.') . ' ₫'; }
+}
 
-$promos = $conn->query("SELECT * FROM san_pham WHERE trang_thai=1 AND gia_cu IS NOT NULL AND gia_cu>gia ORDER BY created_at DESC LIMIT 12")->fetchAll();
-$latest = $conn->query("SELECT * FROM san_pham WHERE trang_thai=1 ORDER BY created_at DESC LIMIT 12")->fetchAll();
+/**
+ * getProductImage - lấy ảnh sản phẩm (ưu tiên la_anh_chinh, nếu không -> first)
+ * trả về path relative (không in debug).
+ */
+function getProductImage($conn, $product_id) {
+    $placeholder = 'images/placeholder.jpg';
+    try {
+        $stmt = $conn->prepare("SELECT duong_dan FROM anh_san_pham WHERE id_san_pham = :id AND la_anh_chinh = 1 LIMIT 1");
+        $stmt->execute([':id' => $product_id]);
+        $path = $stmt->fetchColumn();
+        if (!$path) {
+            $stmt2 = $conn->prepare("SELECT duong_dan FROM anh_san_pham WHERE id_san_pham = :id ORDER BY thu_tu ASC, id_anh ASC LIMIT 1");
+            $stmt2->execute([':id' => $product_id]);
+            $path = $stmt2->fetchColumn();
+        }
+    } catch (Exception $e) {
+        $path = null;
+    }
 
-// helper: ensure cart session keys normalized when adding products elsewhere in site
-if (!isset($_SESSION['cart'])) $_SESSION['cart'] = [];
+    if (!$path) return $placeholder;
+    $path = trim($path);
 
-// cart total count (for badge) — safe count
+    // absolute URL?
+    if (preg_match('#^https?://#i', $path)) return $path;
+
+    $candidates = [
+        ltrim($path, '/'),
+        'images/' . ltrim($path, '/'),
+        'images/products/' . ltrim($path, '/'),
+        'uploads/' . ltrim($path, '/'),
+        'public/' . ltrim($path, '/'),
+        'images/' . basename($path),
+        'images/products/' . basename($path),
+        'uploads/' . basename($path),
+    ];
+    $candidates = array_values(array_unique($candidates));
+    foreach ($candidates as $c) {
+        if (file_exists(__DIR__ . '/' . $c) && filesize(__DIR__ . '/' . $c) > 0) {
+            return $c;
+        }
+    }
+    // fallback
+    return $placeholder;
+}
+
+/**
+ * getBannerImage - trả về banner path (thử nhiều candidate)
+ */
+function getBannerImage($filename) {
+    $placeholder = 'images/placeholder-banner.jpg';
+    $candidates = [
+        ltrim($filename, '/'),
+        'images/' . ltrim($filename, '/'),
+        'assets/images/' . ltrim($filename, '/'),
+        'uploads/' . ltrim($filename, '/'),
+        '../images/' . ltrim($filename, '/')
+    ];
+    foreach (array_values(array_unique($candidates)) as $c) {
+        if (file_exists(__DIR__ . '/' . $c) && filesize(__DIR__ . '/' . $c) > 0) {
+            return $c;
+        }
+    }
+    return $placeholder;
+}
+
+/* --- load data --- */
+try {
+    $cats = $conn->query("SELECT * FROM danh_muc WHERE trang_thai=1 ORDER BY thu_tu ASC")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) { $cats = []; }
+
+try {
+    $promos = $conn->query("SELECT * FROM san_pham WHERE trang_thai=1 AND gia_cu IS NOT NULL AND gia_cu>gia ORDER BY created_at DESC LIMIT 12")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) { $promos = []; }
+
+try {
+    $latest = $conn->query("SELECT * FROM san_pham WHERE trang_thai=1 ORDER BY created_at DESC LIMIT 12")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) { $latest = []; }
+
+/* cart count */
+if (!isset($_SESSION['cart']) || !is_array($_SESSION['cart'])) $_SESSION['cart'] = [];
 $cart_count = 0;
 foreach ($_SESSION['cart'] as $it) {
     $cart_count += isset($it['qty']) ? (int)$it['qty'] : (isset($it['sl']) ? (int)$it['sl'] : 1);
 }
+
+$user_name = !empty($_SESSION['user']['ten']) ? $_SESSION['user']['ten'] : null;
+
+/* banners */
+$banner1 = getBannerImage('banner1.jpg');
+$banner2 = getBannerImage('banner2.jpg');
+$banner3 = getBannerImage('banner3.jpg');
 ?>
 <!doctype html>
 <html lang="vi">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title><?= esc(site_name($conn)) ?></title>
-
-  <!-- Bootstrap + icons -->
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
   <link href="assets/css/style.css" rel="stylesheet">
-
   <style>
-    /* ---------- Header / Megamenu styling ---------- */
-    :root { --ae-primary: #0d6efd; --muted: #6c757d; --card-bg:#ffffff; --accent:#0b1220; }
-    .ae-header { background:#fff; border-bottom:1px solid #eef3f8; position:sticky; top:0; z-index:1050; }
-    .ae-header .container { max-width:1200px; }
-    .ae-brand { display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; }
-    .ae-logo-mark { width:50px;height:50px;border-radius:10px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px; }
-    .ae-logo-title { line-height:1; }
-    .ae-logo-title .title { font-weight:800; font-size:18px; }
-    .ae-logo-title .subtitle { font-size:12px; color:var(--muted); margin-top:2px; }
-
-    .ae-mainnav { display:flex; gap:12px; align-items:center; justify-content:center; flex:1; }
-    .ae-mainnav .nav-link { color:#333; padding:10px 14px; border-radius:10px; font-weight:600; text-decoration:none; }
-    .ae-mainnav .nav-link:hover, .ae-mainnav .nav-link.active { background:rgba(13,110,253,0.06); color:var(--ae-primary); }
-
-    /* mega simple vertical menu */
-    .simple-cat-list .cat-name-small {
-      font-size: 16px;
-      font-weight: 500;
-      line-height: 1.2;
-      padding-left: 2px;
-    }
-    .simple-cat-list li a:hover .cat-name-small { color: var(--ae-primary); }
-
-    /* Mini cart & header small improvements */
-    .icon-circle { width:44px; height:44px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; background:#f6f8fb; color:var(--accent); }
-    .cart-badge { position:relative; top:-10px; left:-8px; font-size:.72rem; }
-    .mini-cart { min-width:340px; max-width:420px; }
-    .mini-cart .mini-item img { width:56px; height:56px; object-fit:cover; border-radius:8px; }
-
-    /* hero */
-    .hero { padding:28px 0; }
-
-    /* categories / cards */
-    .category-card { border-radius:12px; transition:transform .12s, box-shadow .12s; border:1px solid #eef2f7; padding:18px; }
-    .category-card:hover { transform:translateY(-6px); box-shadow:0 14px 40px rgba(13,38,59,0.04); }
-
-    /* product card tweaks */
-    .product-card { border-radius:12px; overflow:hidden; border:1px solid #eef2f7; transition:transform .14s, box-shadow .14s; }
-    .product-card:hover { transform:translateY(-6px); box-shadow:0 14px 40px rgba(13,38,59,0.06); }
-
-    /* ===== ABOUT + CONTACT sections styling ===== */
-    .site-about { background: linear-gradient(135deg,#f7fbff,#ffffff); padding:48px 0; }
-    .site-about .about-card { border-radius:12px; padding:24px; background:#fff; box-shadow:0 8px 30px rgba(13,38,59,0.03); }
-    .site-contact { background: linear-gradient(180deg,#fff,#fbfdff); padding:48px 0; }
-    .contact-card { border-radius:12px; overflow:hidden; display:flex; gap:0; box-shadow:0 10px 30px rgba(13,38,59,0.03); }
-    .contact-left { padding:22px; flex:1; background:#fff; }
-    .contact-right { width:360px; background:linear-gradient(180deg,#fbfdff,#f6f9ff); padding:18px; }
-    .contact-right .info-item { margin-bottom:12px; }
-    .map-box { border-radius:8px; overflow:hidden; border:1px solid #e9eef8; height:180px; }
-    @media (max-width:991px){ .contact-card { flex-direction:column; } .contact-right{ width:100%; } .ae-mainnav{ display:none; } }
+    :root{--accent:#0b7bdc;--muted:#6c757d;}
+    body{background:#f8fbff}
+    .ae-navbar{background:#fff;box-shadow:0 6px 18px rgba(11,38,80,0.04)}
+    .ae-logo-mark{width:46px;height:46px;border-radius:10px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800}
+    .product-card{border-radius:12px;background:linear-gradient(180deg,#fff,#f6fbff);border:1px solid rgba(11,38,80,0.04);transition:transform .14s}
+    .product-card:hover{transform:translateY(-8px);box-shadow:0 24px 60px rgba(11,38,80,0.06)}
+    .sale-badge{padding:6px 8px;border-radius:10px}
+    .price-new{font-weight:800;color:var(--accent);font-size:1.05rem}
+    .price-old{color:#9aa8c2;text-decoration:line-through}
+    .qv-thumb{width:70px;height:70px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid transparent}
+    .qv-thumb.active{border-color:var(--accent);box-shadow:0 8px 20px rgba(11,38,80,0.06)}
+    .swatch { width:28px;height:28px;border-radius:50%;display:inline-block;border:2px solid #fff;box-shadow:0 2px 6px rgba(11,38,80,0.06);margin-right:6px;cursor:pointer }
+    .size-btn { border-radius:8px;padding:6px 10px;border:1px solid #e6eefb; background:#fff; cursor:pointer;margin-right:6px }
+    .add-anim { transition: transform .18s; }
+    .about-block { background: linear-gradient(135deg,#ffffff,#f3f8ff); padding:48px 0; }
+    .about-card { background:#fff; border-radius:12px; padding:28px; box-shadow:0 10px 30px rgba(11,38,80,0.04); }
   </style>
 </head>
 <body>
 
-<!-- HEADER -->
-<header class="ae-header shadow-sm">
-  <div class="container d-flex align-items-center gap-3 py-2">
-    <a class="ae-brand" href="index.php" aria-label="<?= esc(site_name($conn)) ?>">
-      <div class="ae-logo-mark" aria-hidden="true">AE</div>
-      <div class="ae-logo-title d-none d-md-block">
-        <div class="title"><?= esc(site_name($conn)) ?></div>
-        <div class="subtitle">Thời trang nam cao cấp</div>
+<!-- NAV -->
+<nav class="navbar navbar-expand-lg ae-navbar sticky-top">
+  <div class="container">
+    <a class="navbar-brand d-flex align-items-center gap-2" href="index.php">
+      <div class="ae-logo-mark">AE</div>
+      <div class="d-none d-md-block">
+        <div style="font-weight:800"><?= esc(site_name($conn)) ?></div>
+        <div style="font-size:12px;color:var(--muted)">Thời trang nam cao cấp</div>
       </div>
     </a>
 
-    <!-- center menu -->
-    <nav class="ae-mainnav d-none d-lg-flex" role="navigation" aria-label="Main menu">
-      <a class="nav-link" href="index.php">Trang chủ</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMain"><span class="navbar-toggler-icon"></span></button>
 
-      <!-- improved megamenu: simple vertical list for clarity -->
-      <div class="nav-item dropdown">
-        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown" aria-expanded="false">Sản phẩm</a>
-        <div class="dropdown-menu shadow-sm p-0" style="border-radius:8px; min-width:220px; overflow:hidden;">
-          <div class="p-3" style="width:220px;">
-            <ul class="simple-cat-list list-unstyled mb-2">
-              <?php foreach ($cats as $c): ?>
-                <li class="py-2">
-                  <a href="category.php?slug=<?= urlencode($c['slug'] ?? '') ?>" class="text-decoration-none text-dark d-block">
-                    <span class="cat-name-small"><?= esc($c['ten']) ?></span>
-                  </a>
-                </li>
-              <?php endforeach; ?>
-            </ul>
-
-            <hr style="margin:8px 0 10px;border-color:#eee">
-
-            <div>
-              <a href="sanpham.php" class="text-decoration-none d-block small text-muted">Xem tất cả sản phẩm</a>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <a class="nav-link" href="sale.php" style="font-weight:700; font-size:1.02rem;">Danh Mục Sale</a>
-      <a class="nav-link" href="about.php">Giới Thiệu</a>
-    </nav>
-
-    <!-- right controls -->
-    <div class="ms-auto d-flex align-items-center gap-2">
-      <!-- search -->
-      <form class="d-none d-lg-flex" method="get" action="sanpham.php" role="search" style="margin-right:8px;">
-        <div class="input-group input-group-sm shadow-sm" style="border-radius:10px; overflow:hidden;">
-          <input name="q" class="form-control form-control-sm" placeholder="Tìm sản phẩm, mã..." value="<?= esc($_GET['q'] ?? '') ?>" aria-label="Tìm sản phẩm">
-          <button class="btn btn-dark btn-sm" type="submit"><i class="bi bi-search"></i></button>
-        </div>
-      </form>
-
-      <!-- account -->
-      <div class="dropdown">
-        <a class="text-decoration-none d-flex align-items-center" href="#" data-bs-toggle="dropdown" aria-expanded="false">
-          <div class="icon-circle" title="Tài khoản"><i class="bi bi-person-fill"></i></div>
-          <span class="ms-2 d-none d-md-inline small"><?= !empty($_SESSION['user']) ? esc($_SESSION['user']['ten']) : 'Tài khoản' ?></span>
-        </a>
-        <ul class="dropdown-menu dropdown-menu-end p-2" style="min-width:220px;">
-          <?php if(empty($_SESSION['user'])): ?>
-            <li><a class="dropdown-item" href="login.php">Đăng nhập</a></li>
-            <li><a class="dropdown-item" href="register.php">Tạo tài khoản</a></li>
-          <?php else: ?>
-            <li><a class="dropdown-item" href="account.php">Tài khoản của tôi</a></li>
-            <li><a class="dropdown-item" href="orders.php">Đơn hàng</a></li>
+    <div class="collapse navbar-collapse" id="navMain">
+      <ul class="navbar-nav mx-auto mb-2 mb-lg-0">
+        <li class="nav-item"><a class="nav-link" href="index.php">Trang chủ</a></li>
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">Sản phẩm</a>
+          <ul class="dropdown-menu">
+            <?php foreach($cats as $c): ?>
+              <li><a class="dropdown-item" href="category.php?slug=<?= urlencode($c['slug']) ?>"><?= esc($c['ten']) ?></a></li>
+            <?php endforeach; ?>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item text-danger" href="logout.php">Đăng xuất</a></li>
-          <?php endif; ?>
-        </ul>
-      </div>
+            <li><a class="dropdown-item text-muted" href="sanpham.php">Xem tất cả sản phẩm</a></li>
+          </ul>
+        </li>
+        <li class="nav-item"><a class="nav-link" href="about.php">Giới Thiệu</a></li>
+        <li class="nav-item"><a class="nav-link" href="contact.php">Liên hệ</a></li>
+        <li><a class="dropdown-item" href="orders.php">Đơn hàng của tôi</a></li>
+      </ul>
 
-      <!-- mini cart -->
-      <div class="dropdown">
-        <a class="text-decoration-none position-relative d-flex align-items-center ms-2" href="#" id="miniCartBtn" data-bs-toggle="dropdown" aria-expanded="false">
-          <div class="icon-circle"><i class="bi bi-bag-fill"></i></div>
-          <span class="ms-2 d-none d-md-inline small">Giỏ hàng</span>
-          <span class="badge bg-danger rounded-pill cart-badge"><?= (int)$cart_count ?></span>
-        </a>
-        <div class="dropdown-menu dropdown-menu-end mini-cart p-3 shadow-sm" aria-labelledby="miniCartBtn">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <strong>Giỏ hàng (<?= (int)$cart_count ?>)</strong>
-            <a href="cart.php" class="small">Xem đầy đủ</a>
-          </div>
+      <div class="d-flex align-items-center gap-2">
+        <form class="d-none d-lg-flex" method="get" action="sanpham.php"><div class="input-group input-group-sm"><input name="q" class="form-control" placeholder="Tìm sản phẩm, mã..." value="<?= esc($_GET['q'] ?? '') ?>"><button class="btn btn-dark" type="submit"><i class="bi bi-search"></i></button></div></form>
 
-          <?php if (empty($_SESSION['cart'])): ?>
-            <div class="text-muted small">Bạn chưa có sản phẩm nào trong giỏ.</div>
-            <div class="mt-3"><a href="sanpham.php" class="btn btn-sm btn-primary w-100">Mua ngay</a></div>
-          <?php else: ?>
-            <div style="max-height:260px; overflow:auto;">
-              <?php $total=0; foreach($_SESSION['cart'] as $id=>$item):
-                $qty = isset($item['qty']) ? (int)$item['qty'] : (isset($item['sl']) ? (int)$item['sl'] : 1);
-                $price = isset($item['price']) ? (float)$item['price'] : (isset($item['gia']) ? (float)$item['gia'] : 0);
-                $name = $item['name'] ?? $item['ten'] ?? '';
-                $img = $item['img'] ?? $item['hinh'] ?? 'images/placeholder.jpg';
-                $subtotal = $qty * $price;
-                $total += $subtotal;
-              ?>
-                <div class="d-flex gap-2 align-items-center mini-item py-2">
-                  <img src="<?= esc($img) ?>" alt="<?= esc($name) ?>" style="width:56px;height:56px;object-fit:cover;border-radius:8px">
-                  <div class="flex-grow-1">
-                    <div class="small fw-semibold mb-1"><?= esc($name) ?></div>
-                    <div class="small text-muted"><?= $qty ?> x <?= number_format($price,0,',','.') ?> ₫</div>
-                  </div>
-                  <div class="small"><?= number_format($subtotal,0,',','.') ?> ₫</div>
-                </div>
-              <?php endforeach; ?>
-            </div>
-
-            <div class="d-flex justify-content-between align-items-center mt-3">
-              <div class="text-muted small">Tạm tính</div>
-              <div class="fw-semibold"><?= number_format($total,0,',','.') ?> ₫</div>
-            </div>
-
-            <div class="mt-3 d-grid gap-2">
-              <a href="cart.php" class="btn btn-outline-secondary btn-sm">Giỏ hàng</a>
-              <a href="checkout.php" class="btn btn-primary btn-sm">Thanh toán</a>
-            </div>
-          <?php endif; ?>
+        <div class="dropdown">
+          <a class="d-flex align-items-center text-decoration-none" href="#" data-bs-toggle="dropdown">
+            <div style="width:40px;height:40px;border-radius:8px;background:#f6f8fb;display:flex;align-items:center;justify-content:center;color:var(--accent)"><i class="bi bi-person-fill"></i></div>
+            <span class="ms-2 d-none d-md-inline small"><?= $user_name ? esc($user_name) : 'Tài khoản' ?></span>
+          </a>
+          <ul class="dropdown-menu dropdown-menu-end p-2">
+            <?php if(empty($_SESSION['user'])): ?>
+              <li><a class="dropdown-item" href="login.php">Đăng nhập</a></li>
+              <li><a class="dropdown-item" href="register.php">Tạo tài khoản</a></li>
+            <?php else: ?>
+              <li><a class="dropdown-item" href="account.php">Tài khoản của tôi</a></li>
+              <li><a class="dropdown-item" href="orders.php">Đơn hàng</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item text-danger" href="logout.php">Đăng xuất</a></li>
+            <?php endif; ?>
+          </ul>
         </div>
-      </div>
 
-      <!-- mobile menu toggle -->
-      <button class="btn btn-light d-lg-none ms-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileMenu" aria-controls="mobileMenu" aria-label="Mở menu">
-        <i class="bi bi-list"></i>
-      </button>
+        <div class="dropdown">
+          <a class="d-flex align-items-center text-decoration-none position-relative" href="#" data-bs-toggle="dropdown">
+            <div style="width:40px;height:40px;border-radius:8px;background:#f6f8fb;display:flex;align-items:center;justify-content:center;color:var(--accent)"><i class="bi bi-bag-fill"></i></div>
+            <span class="ms-2 d-none d-md-inline small">Giỏ hàng</span>
+            <span class="badge bg-danger rounded-pill" style="position:relative;top:-10px;left:-8px"><?= (int)$cart_count ?></span>
+          </a>
+          <div class="dropdown-menu dropdown-menu-end p-3" style="min-width:320px">
+            <div class="d-flex justify-content-between align-items-center mb-2"><strong>Giỏ hàng (<?= (int)$cart_count ?>)</strong><a href="cart.php" class="small">Xem đầy đủ</a></div>
+            <?php if (empty($_SESSION['cart'])): ?>
+              <div class="text-muted small">Bạn chưa có sản phẩm nào trong giỏ.</div>
+              <div class="mt-3"><a href="sanpham.php" class="btn btn-primary btn-sm w-100">Mua ngay</a></div>
+            <?php else: ?>
+              <div style="max-height:240px;overflow:auto">
+                <?php $total=0; foreach($_SESSION['cart'] as $id=>$item): 
+                  $qty = isset($item['qty']) ? (int)$item['qty'] : (isset($item['sl']) ? (int)$item['sl'] : 1);
+                  $price = isset($item['price']) ? (float)$item['price'] : (isset($item['gia']) ? (float)$item['gia'] : 0);
+                  $name = $item['name'] ?? $item['ten'] ?? '';
+                  $img = $item['img'] ?? $item['hinh'] ?? 'images/placeholder.jpg';
+                  $img = preg_match('#^https?://#i', $img) ? $img : ltrim($img, '/');
+                  $subtotal = $qty * $price; $total += $subtotal;
+                ?>
+                  <div class="d-flex gap-2 align-items-center py-2">
+                    <img src="<?= esc($img) ?>" style="width:56px;height:56px;object-fit:cover;border-radius:8px" alt="<?= esc($name) ?>">
+                    <div class="flex-grow-1"><div class="small fw-semibold mb-1"><?= esc($name) ?></div><div class="small text-muted"><?= $qty ?> x <?= number_format($price,0,',','.') ?> ₫</div></div>
+                    <div class="small"><?= number_format($subtotal,0,',','.') ?> ₫</div>
+                  </div>
+                <?php endforeach; ?>
+              </div>
+              <div class="d-flex justify-content-between align-items-center mt-3"><div class="text-muted small">Tạm tính</div><div class="fw-semibold"><?= number_format($total,0,',','.') ?> ₫</div></div>
+              <div class="mt-3 d-grid gap-2"><a href="cart.php" class="btn btn-outline-secondary btn-sm">Giỏ hàng</a><a href="checkout.php" class="btn btn-primary btn-sm">Thanh toán</a></div>
+            <?php endif; ?>
+          </div>
+        </div>
+
+      </div>
     </div>
   </div>
-</header>
-
-<!-- Mobile offcanvas -->
-<div class="offcanvas offcanvas-start" tabindex="-1" id="mobileMenu" aria-labelledby="mobileMenuLabel">
-  <div class="offcanvas-header">
-    <h5 id="mobileMenuLabel"><?= esc(site_name($conn)) ?></h5>
-    <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Đóng"></button>
-  </div>
-  <div class="offcanvas-body">
-    <form action="sanpham.php" method="get" class="mb-3 d-flex">
-      <input class="form-control me-2" name="q" placeholder="Tìm sản phẩm...">
-      <button class="btn btn-dark">Tìm</button>
-    </form>
-
-    <ul class="list-unstyled">
-      <li class="mb-2"><a href="index.php" class="text-decoration-none">Trang chủ</a></li>
-      <li class="mb-2"><a href="sanpham.php" class="text-decoration-none">Sản phẩm</a></li>
-      <?php foreach($cats as $c): ?>
-        <li class="mb-2 ps-2"><a href="category.php?slug=<?= urlencode($c['slug']) ?>" class="text-decoration-none"><?= esc($c['ten']) ?></a></li>
-      <?php endforeach; ?>
-      <li class="mb-2"><a href="sale.php" class="text-decoration-none">Danh Mục Sale</a></li>
-      <li class="mb-2"><a href="about.php" class="text-decoration-none">Giới Thiệu</a></li>
-    </ul>
-  </div>
-</div>
+</nav>
 
 <!-- HERO -->
-<section class="hero py-3">
+<section class="py-3">
   <div class="container">
-    <div id="heroCarousel" class="carousel slide" data-bs-ride="carousel">
+    <div id="heroCarousel" class="carousel slide rounded" data-bs-ride="carousel">
       <div class="carousel-inner">
-        <div class="carousel-item active">
-          <img src="images/banner1.jpg" class="d-block w-100 rounded" alt="banner1" style="height:420px; object-fit:cover;">
-        </div>
-        <div class="carousel-item">
-          <img src="images/banner2.jpg" class="d-block w-100 rounded" alt="banner2" style="height:420px; object-fit:cover;">
-        </div>
-        <div class="carousel-item">
-          <img src="images/banner3.jpg" class="d-block w-100 rounded" alt="banner3" style="height:420px; object-fit:cover;">
-        </div>
+        <div class="carousel-item active"><img src="<?= esc($banner1) ?>" class="d-block w-100" style="height:420px;object-fit:cover" alt="banner1"></div>
+        <div class="carousel-item"><img src="<?= esc($banner2) ?>" class="d-block w-100" style="height:420px;object-fit:cover" alt="banner2"></div>
+        <div class="carousel-item"><img src="<?= esc($banner3) ?>" class="d-block w-100" style="height:420px;object-fit:cover" alt="banner3"></div>
       </div>
-      <button class="carousel-control-prev" type="button" data-bs-target="#heroCarousel" data-bs-slide="prev">
-        <span class="carousel-control-prev-icon"></span>
-      </button>
-      <button class="carousel-control-next" type="button" data-bs-target="#heroCarousel" data-bs-slide="next">
-        <span class="carousel-control-next-icon"></span>
-      </button>
+      <button class="carousel-control-prev" type="button" data-bs-target="#heroCarousel" data-bs-slide="prev"><span class="carousel-control-prev-icon"></span></button>
+      <button class="carousel-control-next" type="button" data-bs-target="#heroCarousel" data-bs-slide="next"><span class="carousel-control-next-icon"></span></button>
     </div>
   </div>
 </section>
 
-<!-- CATEGORIES (featured) -->
+<!-- CATEGORIES -->
 <section class="py-4">
   <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-3">
-      <h5 class="mb-0">Danh mục</h5>
-      <a href="sanpham.php" class="text-muted small">Xem tất cả</a>
+      <h5 class="mb-0">Danh mục</h5><a href="sanpham.php" class="text-muted small">Xem tất cả</a>
     </div>
     <div class="row g-3">
-      <?php foreach($featuredCats as $c): ?>
+      <?php $featuredCats = array_slice($cats,0,6); foreach($featuredCats as $c): ?>
         <div class="col-6 col-sm-4 col-md-2">
           <a href="category.php?slug=<?= urlencode($c['slug']) ?>" class="text-decoration-none">
-            <div class="category-card text-center p-3">
+            <div class="p-3 text-center border rounded bg-white">
               <div class="fw-semibold"><?= esc($c['ten']) ?></div>
             </div>
           </a>
@@ -291,47 +263,46 @@ foreach ($_SESSION['cart'] as $it) {
 <!-- PROMO -->
 <section class="py-4 bg-light">
   <div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h5 class="mb-0">Sản phẩm khuyến mãi</h5>
-      <a href="#" class="text-muted small">Xem thêm</a>
-    </div>
+    <div class="d-flex justify-content-between align-items-center mb-3"><h5 class="mb-0">Sản phẩm khuyến mãi</h5><a href="sale.php" class="text-muted small">Xem thêm</a></div>
     <div class="row g-3">
       <?php foreach($promos as $p):
-        $imgStmt = $conn->prepare("SELECT duong_dan FROM anh_san_pham WHERE id_san_pham = :id AND la_anh_chinh = 1 LIMIT 1");
-        $imgStmt->execute(['id'=>$p['id_san_pham']]);
-        $imgp = $imgStmt->fetchColumn() ?: 'images/placeholder.jpg';
+        $imgp = getProductImage($conn, $p['id_san_pham']);
         $discount = ($p['gia_cu'] && $p['gia_cu']>$p['gia']) ? round((($p['gia_cu']-$p['gia'])/$p['gia_cu'])*100) : 0;
       ?>
       <div class="col-6 col-sm-4 col-md-3">
-        <div class="card product-card h-100 position-relative">
-          <div class="position-relative">
-            <img src="<?= esc($imgp) ?>" class="card-img-top p-3" style="height:220px;object-fit:contain;">
-            <?php if($discount>0): ?><div class="badge bg-danger sale-badge position-absolute" style="right:12px; top:12px">-<?= $discount ?>%</div><?php endif; ?>
-            <div class="product-actions" style="right:8px; top:8px;">
-              <button class="btn btn-sm btn-light" data-product='<?= json_encode([
+        <div class="product-card h-100 d-flex flex-column">
+          <div class="position-relative text-center p-3">
+            <?php if($discount>0): ?><span class="badge bg-danger sale-badge position-absolute" style="left:12px;top:12px">-<?= $discount ?>%</span><?php endif; ?>
+            <a href="product.php?id=<?= $p['id_san_pham'] ?>"><img src="<?= esc($imgp) ?>" alt="<?= esc($p['ten']) ?>" style="height:220px;object-fit:contain" class="mx-auto"></a>
+          </div>
+
+          <div class="p-3 mt-auto">
+            <h6 class="mb-2"><?= esc($p['ten']) ?></h6>
+            <div class="d-flex align-items-center mb-3">
+              <div>
+                <div class="price-new"><?= number_format($p['gia'],0,',','.') ?> ₫</div>
+                <?php if($p['gia_cu'] && $p['gia_cu']>$p['gia']): ?><div class="price-old"><?= number_format($p['gia_cu'],0,',','.') ?> ₫</div><?php endif; ?>
+              </div>
+              <div class="ms-auto small text-muted">Còn <?= (int)$p['so_luong'] ?> sp</div>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button class="btn btn-outline-primary w-50" data-product='<?= json_encode([
                 'id'=>$p['id_san_pham'],
                 'name'=>$p['ten'],
                 'gia_raw'=>$p['gia'],
                 'price'=>$p['gia'],
-                'mo_ta'=>mb_substr(strip_tags($p['mo_ta']),0,220),
-                'img'=>$imgp
-              ], JSON_UNESCAPED_UNICODE) ?>' onclick="openQuickView(this)"><i class="bi bi-eye"></i></button>
+                'mo_ta'=>mb_substr(strip_tags($p['mo_ta']),0,400),
+                'img'=>$imgp,
+                'stock'=>(int)$p['so_luong'],
+                'thumbs'=>[$imgp]
+              ], JSON_UNESCAPED_UNICODE) ?>' onclick="openQuickView(this)"><i class="bi bi-eye"></i> Xem</button>
 
-              <form method="post" action="cart.php" class="d-inline">
+              <form method="post" action="cart.php" class="w-50">
                 <input type="hidden" name="action" value="add">
                 <input type="hidden" name="id" value="<?= $p['id_san_pham'] ?>">
-                <button class="btn btn-sm btn-success"><i class="bi bi-cart-plus"></i></button>
+                <button class="btn btn-success w-100 add-anim"><i class="bi bi-cart-plus"></i> Thêm</button>
               </form>
-            </div>
-          </div>
-
-          <div class="card-body d-flex flex-column">
-            <h6 class="card-title"><?= esc($p['ten']) ?></h6>
-            <div class="mt-auto">
-              <div class="d-flex align-items-center">
-                <div class="product-price me-2"><?= price($p['gia']) ?></div>
-                <?php if($p['gia_cu'] && $p['gia_cu']>$p['gia']): ?><div class="text-muted text-decoration-line-through small"><?= number_format($p['gia_cu'],0,',','.') ?> ₫</div><?php endif; ?>
-              </div>
             </div>
           </div>
         </div>
@@ -344,26 +315,13 @@ foreach ($_SESSION['cart'] as $it) {
 <!-- LATEST -->
 <section class="py-4">
   <div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h5 class="mb-0">Sản phẩm mới</h5>
-      <a href="#" class="text-muted small">Xem thêm</a>
-    </div>
+    <div class="d-flex justify-content-between align-items-center mb-3"><h5 class="mb-0">Sản phẩm mới</h5><a href="sanpham.php" class="text-muted small">Xem thêm</a></div>
     <div class="row g-3">
-      <?php foreach($latest as $p):
-        $imgStmt = $conn->prepare("SELECT duong_dan FROM anh_san_pham WHERE id_san_pham = :id AND la_anh_chinh = 1 LIMIT 1");
-        $imgStmt->execute(['id'=>$p['id_san_pham']]);
-        $imgp = $imgStmt->fetchColumn() ?: 'images/placeholder.jpg';
-      ?>
+      <?php foreach($latest as $p): $imgp = getProductImage($conn, $p['id_san_pham']); ?>
       <div class="col-6 col-sm-4 col-md-3">
-        <div class="card h-100 product-card">
-          <img src="<?= esc($imgp) ?>" class="card-img-top p-3" style="height:220px;object-fit:contain;">
-          <div class="card-body d-flex flex-column">
-            <h6 class="card-title"><?= esc($p['ten']) ?></h6>
-            <div class="mt-auto d-flex justify-content-between align-items-center">
-              <div class="product-price"><?= price($p['gia']) ?></div>
-              <a href="product.php?id=<?= $p['id_san_pham'] ?>" class="btn btn-sm btn-outline-primary">Xem</a>
-            </div>
-          </div>
+        <div class="product-card p-3 text-center h-100">
+          <a href="product.php?id=<?= $p['id_san_pham'] ?>"><img src="<?= esc($imgp) ?>" style="height:200px;object-fit:contain" class="mx-auto" alt="<?= esc($p['ten']) ?>"></a>
+          <div class="mt-3"><h6><?= esc($p['ten']) ?></h6><div class="d-flex justify-content-between align-items-center mt-2"><div class="fw-semibold"><?= number_format($p['gia'],0,',','.') ?> ₫</div><a href="product.php?id=<?= $p['id_san_pham'] ?>" class="btn btn-sm btn-outline-primary">Xem</a></div></div>
         </div>
       </div>
       <?php endforeach; ?>
@@ -371,135 +329,141 @@ foreach ($_SESSION['cart'] as $it) {
   </div>
 </section>
 
-<!-- ===== ABOUT (mô tả ngắn, đẹp) ===== -->
-<section class="site-about">
+<!-- ABOUT -->
+<section class="about-block">
   <div class="container">
-    <div class="row align-items-center g-4">
-      <div class="col-lg-6">
-        <div class="about-card">
-          <h3 class="fw-bold mb-2">Về <?= esc(site_name($conn)) ?></h3>
-          <p class="text-muted mb-3">
-            <?= esc(site_name($conn)) ?> chuyên cung cấp trang phục nam theo phong cách hiện đại — chú trọng chất liệu,
-            kiểu dáng và trải nghiệm mua sắm. Chúng tôi lựa chọn từng sản phẩm kỹ lưỡng để mang đến giá trị thực sự cho khách hàng.
+    <div class="about-card">
+      <div class="row align-items-center">
+        <div class="col-lg-6">
+          <h2 class="fw-bold mb-3">Về <?= esc(site_name($conn)) ?></h2>
+          <p class="text-muted">
+            <?= esc(site_name($conn)) ?> chuyên cung cấp trang phục nam theo phong cách hiện đại — chú trọng chất liệu, kiểu dáng
+            và trải nghiệm mua sắm. Chúng tôi chọn lọc sản phẩm kỹ lưỡng, kiểm tra chất lượng và phục vụ khách hàng tận tâm.
           </p>
 
-          <div class="row g-3">
-            <div class="col-6">
-              <div class="p-3 border rounded">
-                <div class="fw-semibold">Chất lượng</div>
-                <div class="text-muted small">Sản phẩm bền & hợp xu hướng.</div>
-              </div>
+          <div class="about-feat mt-3">
+            <div class="item">
+              <div class="fw-semibold">Chất lượng</div>
+              <div class="small text-muted">Sản phẩm bền & hợp xu hướng</div>
             </div>
-            <div class="col-6">
-              <div class="p-3 border rounded">
-                <div class="fw-semibold">Dịch vụ</div>
-                <div class="text-muted small">Giao hàng nhanh & đổi trả thuận tiện.</div>
-              </div>
+            <div class="item">
+              <div class="fw-semibold">Dịch vụ</div>
+              <div class="small text-muted">Giao hàng nhanh & đổi trả tiện lợi</div>
             </div>
-            <div class="col-6">
-              <div class="p-3 border rounded">
-                <div class="fw-semibold">Uy tín</div>
-                <div class="text-muted small">Hỗ trợ khách hàng tận tâm.</div>
-              </div>
-            </div>
-            <div class="col-6">
-              <div class="p-3 border rounded">
-                <div class="fw-semibold">Giá cả</div>
-                <div class="text-muted small">Cân bằng giữa giá & chất lượng.</div>
-              </div>
+            <div class="item">
+              <div class="fw-semibold">Uy tín</div>
+              <div class="small text-muted">Hỗ trợ khách hàng tận tâm</div>
             </div>
           </div>
 
+          <div class="mt-3">
+            <a href="about.php" class="btn btn-outline-primary">Tìm hiểu thêm</a>
+            <a href="sanpham.php" class="btn btn-primary ms-2">Mua sắm ngay</a>
+          </div>
         </div>
-      </div>
 
-      <div class="col-lg-6 text-center">
-        <img src="images/about-banner.jpg" alt="About" class="img-fluid rounded shadow-sm" style="max-height:360px; object-fit:cover;">
+        <div class="col-lg-6 text-center">
+          <img src="<?= esc(getBannerImage('about-banner.jpg')) ?>" alt="About banner" class="img-fluid rounded" style="max-height:360px; object-fit:cover;">
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ===== CONTACT (gọn, đẹp) ===== -->
-<section class="site-contact">
+<!-- CONTACT -->
+<section class="py-5">
   <div class="container">
-    <div class="mb-4 text-center">
-      <h3 class="fw-bold">Liên hệ</h3>
-      <p class="text-muted">Cần hỗ trợ? Gửi yêu cầu hoặc gọi cho chúng tôi — luôn sẵn sàng phục vụ.</p>
-    </div>
-
-    <div class="contact-card">
-      <div class="contact-left">
+    <div class="row g-4">
+      <div class="col-md-7">
+        <h4>Liên hệ</h4>
+        <p class="text-muted">Gửi yêu cầu hoặc gọi cho chúng tôi — luôn sẵn sàng hỗ trợ.</p>
         <form action="contact.php" method="get" class="row g-3">
-          <div class="col-md-6">
-            <input name="ten" class="form-control form-control-lg" placeholder="Họ & tên" required>
-          </div>
-          <div class="col-md-6">
-            <input name="email" type="email" class="form-control form-control-lg" placeholder="Email" required>
-          </div>
-          <div class="col-md-6">
-            <input name="dien_thoai" class="form-control" placeholder="Số điện thoại (tuỳ chọn)">
-          </div>
-          <div class="col-md-6">
-            <input name="tieu_de" class="form-control" placeholder="Tiêu đề">
-          </div>
-          <div class="col-12">
-            <textarea name="noi_dung" rows="5" class="form-control" placeholder="Nội dung liên hệ..." required></textarea>
-          </div>
-          <div class="col-12 d-flex gap-2">
-            <button class="btn btn-primary">Gửi liên hệ</button>
-            <a href="contact.php" class="btn btn-outline-secondary">Hoặc đến trang Liên hệ chi tiết</a>
-          </div>
+          <div class="col-md-6"><input name="ten" class="form-control" placeholder="Họ & tên" required></div>
+          <div class="col-md-6"><input name="email" class="form-control" placeholder="Email" type="email" required></div>
+          <div class="col-md-6"><input name="dien_thoai" class="form-control" placeholder="Số điện thoại (tuỳ chọn)"></div>
+          <div class="col-md-6"><input name="tieu_de" class="form-control" placeholder="Tiêu đề"></div>
+          <div class="col-12"><textarea name="noi_dung" class="form-control" rows="5" placeholder="Nội dung..." required></textarea></div>
+          <div class="col-12"><button class="btn btn-primary">Gửi liên hệ</button></div>
         </form>
       </div>
-
-      <div class="contact-right">
-        <div class="mb-3">
-          <div class="fw-semibold"><?= esc(site_name($conn)) ?></div>
-          <div class="text-muted small">123 Đường ABC, Quận XYZ</div>
-          <div class="text-muted small">Hotline: <a href="tel:0123456789">0123 456 789</a></div>
-          <div class="text-muted small">Email: <a href="mailto:info@example.com">info@example.com</a></div>
+      <div class="col-md-5">
+        <div class="p-3 bg-white rounded shadow-sm">
+          <h6>Thông tin cửa hàng</h6>
+          <p class="mb-1 small"><?= esc(site_name($conn)) ?></p>
+          <p class="small text-muted">89 Lê Đức Thọ - Nam Từ Liêm - Hà Nội</p>
+          <p class="small">Hotline: <a href="tel:0123456789">0123 456 789</a></p>
+          <p class="small">Email: <a href="mailto:info@example.com">info@example.com</a></p>
+          <hr>
+          <h6 class="small">Giờ mở cửa</h6>
+          <p class="small text-muted">T2 - T7: 08:30 — 18:00<br>CN: Nghỉ</p>
         </div>
-
-        <hr>
-
-        <div class="mb-3">
-          <div class="fw-semibold mb-2">Giờ mở cửa</div>
-          <div class="text-muted small">T2 - T7: 08:30 — 18:00<br>CN: Nghỉ</div>
-        </div>
-
-        <div class="mb-3">
-          <div class="fw-semibold mb-2">Bản đồ</div>
-          <div class="map-box">
-            <iframe src="https://www.google.com/maps?q=Hanoi&output=embed" style="width:100%;height:100%;border:0;" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
-          </div>
-        </div>
-
       </div>
     </div>
   </div>
 </section>
 
-<!-- QUICK VIEW MODAL -->
-<div class="modal fade" id="quickViewModal" tabindex="-1">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
+<!-- QUICKVIEW modal (giữ giống trước) -->
+<div class="modal fade" id="quickViewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-body p-4">
-        <div class="row">
-          <div class="col-md-6" id="qv-image"></div>
+        <div class="row gx-4">
           <div class="col-md-6">
-            <h5 id="qv-title"></h5>
-            <p id="qv-desc" class="text-muted small"></p>
-            <div class="h4 text-danger mb-3" id="qv-price"></div>
-            <form method="post" action="cart.php">
-              <input type="hidden" name="action" value="add">
-              <input type="hidden" name="id" id="qv-id" value="">
-              <div class="mb-3">
-                <label>Số lượng</label>
-                <input type="number" name="qty" value="1" class="form-control" min="1">
+            <div class="qv-main text-center p-3"><img id="qv-main-img" src="images/placeholder.jpg" class="img-fluid" style="max-height:420px;object-fit:contain"></div>
+            <div class="d-flex gap-2 mt-3" id="qv-thumbs"></div>
+          </div>
+          <div class="col-md-6">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <h4 id="qv-title">Tên sản phẩm</h4>
+                <div class="small text-muted" id="qv-sku">Mã: -</div>
+                <div class="mt-2" id="qv-rate">★★★★★ <span class="small text-muted">(0 đánh giá)</span></div>
               </div>
-              <button class="btn btn-success">Thêm vào giỏ</button>
-            </form>
+              <div class="text-end">
+                <div class="h4 text-danger" id="qv-price">0 ₫</div>
+                <div class="small text-muted" id="qv-stock">Còn: -</div>
+              </div>
+            </div>
+
+            <div class="mt-3" id="qv-short-desc">Mô tả ngắn...</div>
+
+            <div class="mt-3">
+              <div class="mb-2"><strong>Màu sắc</strong></div>
+              <div id="qv-swatches" class="mb-3"></div>
+
+              <div class="mb-2"><strong>Kích thước</strong></div>
+              <div id="qv-sizes" class="mb-3"></div>
+
+              <div class="mb-3 d-flex align-items-center gap-3">
+                <div>
+                  <label class="form-label small mb-1">Số lượng</label>
+                  <input id="qv-qty" type="number" class="form-control form-control-sm" value="1" min="1" style="width:100px">
+                </div>
+                <div class="flex-grow-1 text-muted small">Giao hàng nhanh trong 1-3 ngày, đổi trả 7 ngày.</div>
+              </div>
+
+              <div class="d-flex gap-2 mb-2">
+                <form id="qv-addform" method="post" action="cart.php" class="d-flex w-100">
+                  <input type="hidden" name="action" value="add">
+                  <input type="hidden" name="id" id="qv-id" value="">
+                  <input type="hidden" name="qty" id="qv-id-qty" value="1">
+                  <button type="submit" class="btn btn-success w-100 add-anim"><i class="bi bi-cart-plus"></i> Thêm vào giỏ</button>
+                </form>
+                <a id="qv-buy" href="#" class="btn btn-outline-primary">Mua ngay</a>
+              </div>
+
+              <ul class="nav nav-tabs mt-3" id="qvTab" role="tablist">
+                <li class="nav-item" role="presentation"><button class="nav-link active" id="desc-tab" data-bs-toggle="tab" data-bs-target="#desc" type="button">Mô tả</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" id="spec-tab" data-bs-toggle="tab" data-bs-target="#spec" type="button">Thông số</button></li>
+                <li class="nav-item" role="presentation"><button class="nav-link" id="rev-tab" data-bs-toggle="tab" data-bs-target="#rev" type="button">Đánh giá</button></li>
+              </ul>
+              <div class="tab-content p-3 border rounded-bottom" id="qvTabContent">
+                <div class="tab-pane fade show active" id="desc" role="tabpanel"></div>
+                <div class="tab-pane fade" id="spec" role="tabpanel"><div class="small text-muted">Chưa có thông số chi tiết.</div></div>
+                <div class="tab-pane fade" id="rev" role="tabpanel"><div class="small text-muted">Chưa có đánh giá.</div></div>
+              </div>
+
+            </div>
           </div>
         </div>
       </div>
@@ -508,31 +472,72 @@ foreach ($_SESSION['cart'] as $it) {
   </div>
 </div>
 
-<footer class="footer bg-dark text-white py-4 mt-4">
-  <div class="container text-center">
-    <small><?= esc(site_name($conn)) ?> — © <?= date('Y') ?> — Hotline: 0123 456 789</small>
-  </div>
+<footer class="bg-dark text-white py-4 mt-4">
+  <div class="container text-center"><small><?= esc(site_name($conn)) ?> — © <?= date('Y') ?> — Hotline: 0123 456 789</small></div>
 </footer>
 
-<!-- SCRIPTS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-// QuickView handler (uses data-product JSON in product buttons)
 function openQuickView(btn){
   try {
     const data = JSON.parse(btn.getAttribute('data-product'));
     document.getElementById('qv-title').textContent = data.name || '';
-    document.getElementById('qv-desc').textContent = data.mo_ta || data.desc || '';
+    document.getElementById('qv-short-desc').textContent = data.mo_ta || '';
     document.getElementById('qv-price').textContent = new Intl.NumberFormat('vi-VN').format(data.price || data.gia_raw || 0) + ' ₫';
+    document.getElementById('qv-stock').textContent = 'Còn: ' + (data.stock !== undefined ? data.stock : '-');
     document.getElementById('qv-id').value = data.id || '';
-    document.getElementById('qv-image').innerHTML = '<img src="'+(data.img||'images/placeholder.jpg')+'" class="img-fluid rounded">';
+    document.getElementById('qv-main-img').src = data.img || 'images/placeholder.jpg';
+
+    const thumbsBox = document.getElementById('qv-thumbs');
+    thumbsBox.innerHTML = '';
+    let thumbs = Array.isArray(data.thumbs) && data.thumbs.length ? data.thumbs : [data.img || 'images/placeholder.jpg'];
+    thumbs.forEach((t, idx) => {
+      const im = document.createElement('img');
+      im.src = t;
+      im.className = 'qv-thumb' + (idx===0 ? ' active' : '');
+      im.onclick = function(){ document.getElementById('qv-main-img').src = t; document.querySelectorAll('.qv-thumb').forEach(x=>x.classList.remove('active')); this.classList.add('active'); };
+      thumbsBox.appendChild(im);
+    });
+
+    const swBox = document.getElementById('qv-swatches'); swBox.innerHTML = '';
+    if (Array.isArray(data.colors) && data.colors.length) {
+      data.colors.forEach((c) => {
+        const el = document.createElement('span'); el.className='swatch'; el.style.background = c; el.onclick = function(){ document.querySelectorAll('.swatch').forEach(s=>s.style.outline=''); this.style.outline='2px solid rgba(0,0,0,0.06)'; }; swBox.appendChild(el);
+      });
+    } else {
+      ['#111','#0b7bdc','#777'].forEach(c => { const el = document.createElement('span'); el.className='swatch'; el.style.background=c; swBox.appendChild(el); });
+    }
+
+    const sizeBox = document.getElementById('qv-sizes'); sizeBox.innerHTML = '';
+    if (Array.isArray(data.sizes) && data.sizes.length) {
+      data.sizes.forEach(sz => { const b=document.createElement('button'); b.className='size-btn'; b.innerText=sz; b.onclick=function(){document.querySelectorAll('.size-btn').forEach(x=>x.classList.remove('active')); this.classList.add('active');}; sizeBox.appendChild(b); });
+    } else {
+      ['S','M','L','XL'].forEach(sz => { const b=document.createElement('button'); b.className='size-btn'; b.innerText=sz; b.onclick=function(){document.querySelectorAll('.size-btn').forEach(x=>x.classList.remove('active')); this.classList.add('active');}; sizeBox.appendChild(b); });
+    }
+
+    const q = document.getElementById('qv-qty'); q.value = 1; document.getElementById('qv-id-qty').value = 1;
+    q.oninput = function(){ document.getElementById('qv-id-qty').value = Math.max(1, parseInt(this.value||1)); };
+
+    document.getElementById('desc').innerHTML = data.mo_ta ? data.mo_ta : '<div class="small text-muted">Không có mô tả chi tiết.</div>';
+    document.getElementById('spec').innerHTML = data.specs ? data.specs : '<div class="small text-muted">Không có thông số.</div>';
+    document.getElementById('rev').innerHTML = '<div class="small text-muted">Chưa có đánh giá.</div>';
+
+    document.getElementById('qv-buy').href = 'product.php?id=' + encodeURIComponent(data.id || '');
     var myModal = new bootstrap.Modal(document.getElementById('quickViewModal'));
     myModal.show();
   } catch(e) {
-    console.error('QV error', e);
+    console.error('openQuickView error', e);
   }
 }
+
+document.addEventListener('click', function(e){
+  if (e.target.closest('.add-anim')) {
+    const btn = e.target.closest('.add-anim');
+    btn.style.transform = 'scale(0.97)';
+    setTimeout(()=> btn.style.transform = '', 160);
+  }
+});
 </script>
 
 <script src="assets/js/main.js"></script>
