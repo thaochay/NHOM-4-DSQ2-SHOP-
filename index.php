@@ -67,7 +67,7 @@ function getBannerImage($filename) {
         'images/' . ltrim($filename, '/'),
         'assets/images/' . ltrim($filename, '/'),
         'uploads/' . ltrim($filename, '/'),
-        '../images/' . ltrim($filename, '/')
+        '../images/' . ltrim($filename, '/'),
     ];
     foreach (array_values(array_unique($candidates)) as $c) {
         if (file_exists(__DIR__ . '/' . $c) && filesize(__DIR__ . '/' . $c) > 0) {
@@ -100,9 +100,9 @@ foreach ($_SESSION['cart'] as $it) {
 $user_name = !empty($_SESSION['user']['ten']) ? $_SESSION['user']['ten'] : null;
 
 /* banners */
-$banner1 = getBannerImage('banner1.jpg');
-$banner2 = getBannerImage('banner2.jpg');
-$banner3 = getBannerImage('banner3.jpg');
+$banner1 = getBannerImage('ae1.png');
+$banner2 = getBannerImage('anh2.jpg');
+$banner3 = getBannerImage('anh3.jpg');
 ?>
 <!doctype html>
 <html lang="vi">
@@ -114,22 +114,176 @@ $banner3 = getBannerImage('banner3.jpg');
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
   <link href="assets/css/style.css" rel="stylesheet">
   <style>
-    :root{--accent:#0b7bdc;--muted:#6c757d;}
-    body{background:#f8fbff}
-    .ae-navbar{background:#fff;box-shadow:0 6px 18px rgba(11,38,80,0.04)}
-    .ae-logo-mark{width:46px;height:46px;border-radius:10px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800}
-    .product-card{border-radius:12px;background:linear-gradient(180deg,#fff,#f6fbff);border:1px solid rgba(11,38,80,0.04);transition:transform .14s}
-    .product-card:hover{transform:translateY(-8px);box-shadow:0 24px 60px rgba(11,38,80,0.06)}
-    .sale-badge{padding:6px 8px;border-radius:10px}
-    .price-new{font-weight:800;color:var(--accent);font-size:1.05rem}
-    .price-old{color:#9aa8c2;text-decoration:line-through}
-    .qv-thumb{width:70px;height:70px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid transparent}
-    .qv-thumb.active{border-color:var(--accent);box-shadow:0 8px 20px rgba(11,38,80,0.06)}
-    .swatch { width:28px;height:28px;border-radius:50%;display:inline-block;border:2px solid #fff;box-shadow:0 2px 6px rgba(11,38,80,0.06);margin-right:6px;cursor:pointer }
-    .size-btn { border-radius:8px;padding:6px 10px;border:1px solid #e6eefb; background:#fff; cursor:pointer;margin-right:6px }
-    .add-anim { transition: transform .18s; }
-    .about-block { background: linear-gradient(135deg,#ffffff,#f3f8ff); padding:48px 0; }
-    .about-card { background:#fff; border-radius:12px; padding:28px; box-shadow:0 10px 30px rgba(11,38,80,0.04); }
+  :root{
+    --accent:#0b7bdc;
+    --muted:#6c757d;
+    --nav-bg:#ffffff;
+  }
+
+  body{background:#f8fbff}
+
+  .ae-navbar{
+    background:var(--nav-bg);
+    box-shadow:0 6px 18px rgba(11,38,80,0.04);
+    backdrop-filter:blur(12px);
+  }
+  .ae-logo-mark{
+    width:46px;height:46px;border-radius:10px;
+    background:var(--accent);color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:800;
+  }
+  
+
+  /* MENU CHÍNH ĐẸP HƠN */
+  .navbar-nav .nav-item + .nav-item{
+    margin-left:.25rem;
+  }
+  .ae-navbar .nav-link{
+    position:relative;
+    padding:0.75rem 1rem;
+    font-weight:500;
+    font-size:.95rem;
+    color:#1f2933;
+    transition:color .18s ease-out;
+  }
+  .ae-navbar .nav-link::after{
+    content:'';
+    position:absolute;
+    left:1rem;
+    right:1rem;
+    bottom:0.35rem;
+    height:2px;
+    border-radius:99px;
+    background:linear-gradient(90deg,#0b7bdc,#38bdf8);
+    transform:scaleX(0);
+    transform-origin:center;
+    transition:transform .18s ease-out,opacity .18s ease-out;
+    opacity:0;
+  }
+  .ae-navbar .nav-link:hover,
+  .ae-navbar .nav-link:focus{
+    color:#0b7bdc;
+  }
+  .ae-navbar .nav-link:hover::after,
+  .ae-navbar .nav-link:focus::after,
+  .ae-navbar .nav-link.active::after{
+    transform:scaleX(1);
+    opacity:1;
+  }
+
+  /* MENU "ĐƠN HÀNG CỦA TÔI" NỔI BẬT */
+  .nav-orders{
+    padding-inline:0.9rem;
+    margin-left:.25rem;
+    border-radius:999px;
+    background:rgba(11,123,220,.06);
+    display:flex;
+    align-items:center;
+    gap:.35rem;
+  }
+  .nav-orders i{
+    font-size:1rem;
+  }
+  .nav-orders:hover{
+    background:rgba(11,123,220,.12);
+    color:#0b7bdc;
+  }
+
+  /* CARD SP */
+  .product-card{
+    border-radius:12px;
+    background:linear-gradient(180deg,#fff,#f6fbff);
+    border:1px solid rgba(11,38,80,0.04);
+    transition:transform .14s, box-shadow .14s;
+  }
+  .product-card:hover{
+    transform:translateY(-8px);
+    box-shadow:0 24px 60px rgba(11,38,80,0.06);
+  }
+
+  /* Vùng ảnh có hover click QuickView */
+  .qv-clickable{
+    cursor:pointer;
+    border-radius:14px;
+    background:#ffffff;
+    transition:transform .15s, box-shadow .15s;
+  }
+  .qv-clickable:hover{
+    transform:translateY(-3px);
+    box-shadow:0 14px 40px rgba(15,23,42,0.12);
+  }
+
+  .sale-badge{padding:6px 8px;border-radius:10px}
+  .price-new{font-weight:800;color:var(--accent);font-size:1.05rem}
+  .price-old{color:#9aa8c2;text-decoration:line-through}
+
+  .qv-thumb{
+    width:70px;height:70px;object-fit:cover;
+    border-radius:8px;cursor:pointer;
+    border:2px solid transparent;
+  }
+  .qv-thumb.active{
+    border-color:var(--accent);
+    box-shadow:0 8px 20px rgba(11,38,80,0.06);
+  }
+  .swatch{
+    width:28px;height:28px;border-radius:50%;
+    display:inline-block;border:2px solid #fff;
+    box-shadow:0 2px 6px rgba(11,38,80,0.06);
+    margin-right:6px;cursor:pointer;
+  }
+  .size-btn{
+    border-radius:8px;padding:6px 10px;
+    border:1px solid #e6eefb; background:#fff;
+    cursor:pointer;margin-right:6px;
+  }
+  .size-btn.active{
+    border-color:var(--accent);
+    box-shadow:0 4px 12px rgba(15,23,42,0.12);
+  }
+  .add-anim{ transition:transform .18s; }
+
+  .about-block{
+    background:linear-gradient(135deg,#ffffff,#f3f8ff);
+    padding:48px 0;
+  }
+  .about-card{
+    background:#fff; border-radius:12px;
+    padding:28px;
+    box-shadow:0 10px 30px rgba(11,38,80,0.04);
+  }
+
+  /* QUICKVIEW GIAO DIỆN ĐẸP HƠN */
+  #quickViewModal .modal-content{
+    border-radius:20px;
+    border:none;
+    box-shadow:0 22px 80px rgba(15,23,42,0.35);
+  }
+  #quickViewModal .modal-body{
+    background:radial-gradient(circle at top,#f5f9ff,#ffffff);
+  }
+  #quickViewModal .qv-main{
+    border-radius:16px;
+    background:#fff;
+    box-shadow:0 14px 40px rgba(15,23,42,0.08);
+  }
+  #quickViewModal h4{
+    font-weight:700;
+  }
+  #quickViewModal .nav-tabs{
+    border-bottom:1px solid #e5e7eb;
+  }
+  #quickViewModal .nav-tabs .nav-link{
+    border:none;
+    border-bottom:2px solid transparent;
+    font-weight:500;
+    color:#6b7280;
+  }
+  #quickViewModal .nav-tabs .nav-link.active{
+    color:#111827;
+    border-color:#0b7bdc;
+  }
   </style>
 </head>
 <body>
@@ -162,7 +316,12 @@ $banner3 = getBannerImage('banner3.jpg');
         </li>
         <li class="nav-item"><a class="nav-link" href="about.php">Giới Thiệu</a></li>
         <li class="nav-item"><a class="nav-link" href="contact.php">Liên hệ</a></li>
-        <li><a class="dropdown-item" href="orders.php">Đơn hàng của tôi</a></li>
+        <li class="nav-item">
+          <a class="nav-link nav-orders" href="orders.php">
+            <i class="bi bi-receipt-cutoff"></i>
+            <span class="d-none d-lg-inline ms-1">Đơn hàng của tôi</span>
+          </a>
+        </li>
       </ul>
 
       <div class="d-flex align-items-center gap-2">
@@ -268,12 +427,26 @@ $banner3 = getBannerImage('banner3.jpg');
       <?php foreach($promos as $p):
         $imgp = getProductImage($conn, $p['id_san_pham']);
         $discount = ($p['gia_cu'] && $p['gia_cu']>$p['gia']) ? round((($p['gia_cu']-$p['gia'])/$p['gia_cu'])*100) : 0;
+
+        $payloadPromo = [
+          'id' => $p['id_san_pham'],
+          'name' => $p['ten'],
+          'gia_raw' => $p['gia'],
+          'price' => $p['gia'],
+          'mo_ta' => mb_substr(strip_tags($p['mo_ta']),0,400),
+          'img' => $imgp,
+          'stock' => (int)$p['so_luong'],
+          'thumbs' => [$imgp],
+        ];
+        $payloadPromoJson = htmlspecialchars(json_encode($payloadPromo, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
       ?>
       <div class="col-6 col-sm-4 col-md-3">
         <div class="product-card h-100 d-flex flex-column">
-          <div class="position-relative text-center p-3">
+          <div class="position-relative text-center p-3 qv-clickable"
+               data-product="<?= $payloadPromoJson ?>"
+               onclick="openQuickView(this)">
             <?php if($discount>0): ?><span class="badge bg-danger sale-badge position-absolute" style="left:12px;top:12px">-<?= $discount ?>%</span><?php endif; ?>
-            <a href="product.php?id=<?= $p['id_san_pham'] ?>"><img src="<?= esc($imgp) ?>" alt="<?= esc($p['ten']) ?>" style="height:220px;object-fit:contain" class="mx-auto"></a>
+            <img src="<?= esc($imgp) ?>" alt="<?= esc($p['ten']) ?>" style="height:220px;object-fit:contain" class="mx-auto">
           </div>
 
           <div class="p-3 mt-auto">
@@ -287,16 +460,12 @@ $banner3 = getBannerImage('banner3.jpg');
             </div>
 
             <div class="d-flex gap-2">
-              <button class="btn btn-outline-primary w-50" data-product='<?= json_encode([
-                'id'=>$p['id_san_pham'],
-                'name'=>$p['ten'],
-                'gia_raw'=>$p['gia'],
-                'price'=>$p['gia'],
-                'mo_ta'=>mb_substr(strip_tags($p['mo_ta']),0,400),
-                'img'=>$imgp,
-                'stock'=>(int)$p['so_luong'],
-                'thumbs'=>[$imgp]
-              ], JSON_UNESCAPED_UNICODE) ?>' onclick="openQuickView(this)"><i class="bi bi-eye"></i> Xem</button>
+              <button type="button"
+                      class="btn btn-outline-primary w-50 add-anim"
+                      data-product="<?= $payloadPromoJson ?>"
+                      onclick="openQuickView(this)">
+                <i class="bi bi-eye"></i> Xem
+              </button>
 
               <form method="post" action="cart.php" class="w-50">
                 <input type="hidden" name="action" value="add">
@@ -317,11 +486,27 @@ $banner3 = getBannerImage('banner3.jpg');
   <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-3"><h5 class="mb-0">Sản phẩm mới</h5><a href="sanpham.php" class="text-muted small">Xem thêm</a></div>
     <div class="row g-3">
-      <?php foreach($latest as $p): $imgp = getProductImage($conn, $p['id_san_pham']); ?>
+      <?php foreach($latest as $p): $imgp = getProductImage($conn, $p['id_san_pham']);
+        $payloadLatest = [
+          'id' => $p['id_san_pham'],
+          'name' => $p['ten'],
+          'gia_raw' => $p['gia'],
+          'price' => $p['gia'],
+          'mo_ta' => mb_substr(strip_tags($p['mo_ta']),0,400),
+          'img' => $imgp,
+          'stock' => (int)$p['so_luong'],
+          'thumbs' => [$imgp],
+        ];
+        $payloadLatestJson = htmlspecialchars(json_encode($payloadLatest, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+      ?>
       <div class="col-6 col-sm-4 col-md-3">
         <div class="product-card p-3 text-center h-100">
-          <a href="product.php?id=<?= $p['id_san_pham'] ?>"><img src="<?= esc($imgp) ?>" style="height:200px;object-fit:contain" class="mx-auto" alt="<?= esc($p['ten']) ?>"></a>
-          <div class="mt-3"><h6><?= esc($p['ten']) ?></h6><div class="d-flex justify-content-between align-items-center mt-2"><div class="fw-semibold"><?= number_format($p['gia'],0,',','.') ?> ₫</div><a href="product.php?id=<?= $p['id_san_pham'] ?>" class="btn btn-sm btn-outline-primary">Xem</a></div></div>
+          <div class="qv-clickable"
+               data-product="<?= $payloadLatestJson ?>"
+               onclick="openQuickView(this)">
+            <img src="<?= esc($imgp) ?>" style="height:200px;object-fit:contain" class="mx-auto" alt="<?= esc($p['ten']) ?>">
+          </div>
+          <div class="mt-3"><h6><?= esc($p['ten']) ?></h6><div class="d-flex justify-content-between align-items-center mt-2"><div class="fw-semibold"><?= number_format($p['gia'],0,',','.') ?> ₫</div><button type="button" class="btn btn-sm btn-outline-primary add-anim" data-product="<?= $payloadLatestJson ?>" onclick="openQuickView(this)">Xem nhanh</button></div></div>
         </div>
       </div>
       <?php endforeach; ?>
@@ -363,7 +548,7 @@ $banner3 = getBannerImage('banner3.jpg');
         </div>
 
         <div class="col-lg-6 text-center">
-          <img src="<?= esc(getBannerImage('about-banner.jpg')) ?>" alt="About banner" class="img-fluid rounded" style="max-height:360px; object-fit:cover;">
+          <img src="<?= esc(getBannerImage('ae.jpg')) ?>" alt="About banner" class="img-fluid rounded" style="max-height:360px; object-fit:cover;">
         </div>
       </div>
     </div>
@@ -402,7 +587,7 @@ $banner3 = getBannerImage('banner3.jpg');
   </div>
 </section>
 
-<!-- QUICKVIEW modal (giữ giống trước) -->
+<!-- QUICKVIEW modal (giữ giống trước nhưng style đã cải thiện) -->
 <div class="modal fade" id="quickViewModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered">
     <div class="modal-content">
