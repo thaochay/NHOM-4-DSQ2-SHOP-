@@ -324,6 +324,48 @@ CREATE TABLE IF NOT EXISTS luong_ton_kho (
   CONSTRAINT fk_ltk_sp FOREIGN KEY (id_san_pham) REFERENCES san_pham(id_san_pham) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT fk_ltk_ct FOREIGN KEY (id_chi_tiet) REFERENCES chi_tiet_san_pham(id_chi_tiet) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- TABLE: support_requests (lưu ticket hỗ trợ)
+CREATE TABLE IF NOT EXISTS support_requests (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_id INT NULL,                -- có thể NULL nếu user gửi không kèm đơn
+  user_id INT NULL,                 -- id_nguoi_dung từ bảng nguoi_dung
+  type VARCHAR(50) NOT NULL,        -- 'track','cancel','return','refund','other'
+  tag VARCHAR(100) DEFAULT NULL,    -- nhãn / tag ngắn (ví dụ: 'Tra cứu', 'Huỷ đơn'...)
+  subject VARCHAR(255) DEFAULT NULL,
+  message TEXT NOT NULL,
+  attachments JSON DEFAULT NULL,    -- JSON array of public URLs/paths
+  status VARCHAR(50) DEFAULT 'new', -- 'new','open','pending','resolved','closed'
+  priority VARCHAR(20) DEFAULT 'normal', -- optional: low/normal/high
+  assigned_to INT NULL,             -- id_nguoi_dung (agent) nếu cần
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  handled_at TIMESTAMP NULL DEFAULT NULL,
+  CONSTRAINT fk_sr_order FOREIGN KEY (order_id) REFERENCES don_hang(id_don_hang) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT fk_sr_user FOREIGN KEY (user_id) REFERENCES nguoi_dung(id_nguoi_dung) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT fk_sr_assigned FOREIGN KEY (assigned_to) REFERENCES nguoi_dung(id_nguoi_dung) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_sr_order ON support_requests(order_id);
+CREATE INDEX idx_sr_user ON support_requests(user_id);
+CREATE INDEX idx_sr_status ON support_requests(status);
+
+-- TABLE: support_tags (tuỳ chọn: quản lý nhãn / tag có thể dùng cho filter)
+CREATE TABLE IF NOT EXISTS support_tags (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  key_name VARCHAR(80) NOT NULL UNIQUE, -- ví dụ 'track','cancel','return','refund','other'
+  label VARCHAR(150) NOT NULL,           -- hiển thị: 'Tra cứu','Huỷ đơn',...
+  color VARCHAR(20) DEFAULT NULL,        -- css class / color (tuỳ ý)
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Seed tags cơ bản (chỉ thực hiện một lần)
+INSERT INTO support_tags (key_name, label, color) VALUES
+('track','Tra cứu trạng thái','#0d6efd'),
+('cancel','Yêu cầu huỷ đơn','#dc3545'),
+('return','Khiếu nại / Đổi trả','#ffc107'),
+('refund','Yêu cầu hoàn tiền','#fd7e14'),
+('other','Khác','#6c757d')
+ON DUPLICATE KEY UPDATE label = VALUES(label);
+
 
 CREATE TABLE IF NOT EXISTS shipping_methods (
   id INT AUTO_INCREMENT PRIMARY KEY,
