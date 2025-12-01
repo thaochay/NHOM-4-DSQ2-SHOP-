@@ -171,10 +171,7 @@ $pageTitle = esc($cat['ten']) . ' — ' . esc(site_name($conn));
       <a class="nav-link" href="about.php">Giới thiệu</a>
       <a class="nav-link" href="contact.php">Liên hệ</a>
 
-      <a class="nav-orders" href="orders.php" title="Đơn hàng của tôi">
-        <i class="bi bi-receipt-cutoff"></i>
-        <span class="d-none d-lg-inline ms-1">Đơn hàng của tôi</span>
-      </a>
+      
     </nav>
 
     <div class="ms-auto d-flex align-items-center gap-2">
