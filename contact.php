@@ -1,5 +1,5 @@
 <?php
-// contact.php - Trang liên hệ (giao diện & header giống index.php)
+// contact.php - Trang liên hệ (giao diện giống index.php + menu giống index.php)
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/inc/helpers.php';
@@ -73,154 +73,157 @@ $user_name = !empty($_SESSION['user']['ten']) ? $_SESSION['user']['ten'] : null;
 
 /* load categories for menu */
 try {
-    $cats = $conn->query("SELECT id_danh_muc, ten, slug FROM danh_muc WHERE trang_thai=1 ORDER BY thu_tu ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $cats = $conn->query("SELECT * FROM danh_muc WHERE trang_thai=1 ORDER BY thu_tu ASC")->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
     $cats = [];
 }
 
-/* helper active */
+/* expose $cats as $catsMenu for header compatibility */
+$catsMenu = $cats;
+
+/* helper active (kept if needed) */
 function is_active($file) { return basename($_SERVER['PHP_SELF']) === $file ? 'active' : ''; }
 ?>
 <!doctype html>
 <html lang="vi">
 <head>
   <meta charset="utf-8">
-  <title>Liên hệ — <?= esc(site_name($conn)) ?></title>
+  <title>Liên hệ — <?= esc(function_exists('site_name') ? site_name($conn) : 'AE Shop') ?></title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
   <style>
-    :root{
-      --accent:#0b7bdc;
-      --muted:#6c757d;
-      --nav-bg:#ffffff;
-    }
-    body{background:#f8fbff;color:#102a43;font-family:system-ui, -apple-system, "Segoe UI", Roboto, Arial;}
-    .ae-navbar{background:var(--nav-bg);box-shadow:0 6px 18px rgba(11,38,80,0.04);backdrop-filter:blur(12px)}
-    .ae-logo-mark{width:46px;height:46px;border-radius:10px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800}
-    .nav-link.custom{position:relative;padding:.6rem .9rem;border-radius:8px;color:#2b3a42;font-weight:600}
-    .nav-link.custom:hover{color:var(--accent)}
-    .nav-orders{ padding-inline:.8rem;border-radius:999px;background:rgba(11,123,220,.06);display:flex;align-items:center;gap:.4rem;text-decoration:none;color:inherit }
-    .nav-orders:hover{background:rgba(11,123,220,.12); color:var(--accent)}
+    /* ===== SYNCED MENU CSS FROM index.php ===== */
+    :root{ --accent:#0b7bdc; --muted:#6c757d; --nav-bg:#ffffff; --overlay-bg: rgba(12,17,20,0.08); --overlay-text:#061023; --circle-bg:#ffffff; --circle-icon:#0b7bdc; }
+    body{ background:#f8fbff; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; color:#0f1724; }
+
+    .ae-navbar{ background:var(--nav-bg); box-shadow:0 6px 18px rgba(11,38,80,0.04); }
+    .ae-logo-mark{ width:46px;height:46px;border-radius:10px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800; }
+
+    /* header / nav (copied from index.php to ensure identical look) */
+    .ae-header { background:#fff; border-bottom:1px solid #eef3f8; position:sticky; top:0; z-index:1050; }
+    .brand { display:flex; align-items:center; gap:12px; text-decoration:none; color:inherit; }
+    .nav-center { display:flex; gap:8px; align-items:center; justify-content:center; flex:1; }
+    .nav-center .nav-link { color:#333; padding:8px 12px; border-radius:8px; font-weight:600; text-decoration:none; transition:all .15s; }
+    .nav-center .nav-link.active, .nav-center .nav-link:hover { color:var(--accent); background:rgba(11,123,220,0.06); }
+    .nav-orders{ padding-inline:0.9rem; margin-left:.25rem; border-radius:999px; background:rgba(11,123,220,.06); display:flex; align-items:center; gap:.35rem; text-decoration:none; color:inherit; }
+    .nav-orders:hover{ background:rgba(11,123,220,.12); color:var(--accent); }
+    @media (max-width:991px){ .nav-center{ display:none; } .search-input{ display:none; } }
+
+    /* keep minimal styles for contact page */
     .hero { background:linear-gradient(135deg,#f6f9ff,#ffffff); padding:48px 0; text-align:center; }
     .card-contact{ border-radius:12px; box-shadow: 0 8px 30px rgba(13,38,59,0.04); overflow:hidden; background:#fff; }
     .contact-left{ padding:28px; }
     .contact-right{ background:#f7fbff; padding:24px; min-width:320px; border-left:1px solid rgba(11,38,80,0.02); }
     .map-box{ border-radius:8px; overflow:hidden; border:1px solid #e9eef8; }
     .btn-primary{ background:var(--accent); border-color:var(--accent); }
-    @media (max-width:991px){ .nav-center{ display:none } .search-input{ display:none } .contact-right{ order:2 } .contact-left{ order:1 } .contact-right{ min-width:auto } }
-    /* QuickView modal styles (reused) */
-    #quickViewModal .modal-content{ border-radius:20px; border:none; box-shadow:0 22px 80px rgba(15,23,42,0.35); }
-    #quickViewModal .modal-body{ background:radial-gradient(circle at top,#f5f9ff,#ffffff); }
-    #quickViewModal .qv-main{ border-radius:16px; background:#fff; box-shadow:0 14px 40px rgba(15,23,42,0.08); }
-    .qv-thumb{ width:70px;height:70px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid transparent }
-    .qv-thumb.active{border-color:var(--accent);box-shadow:0 8px 20px rgba(11,38,80,0.06)}
+    @media (max-width:991px){ .search-input{ display:none } }
+    /* ===== end synced menu css ===== */
   </style>
 </head>
 <body>
 
-<!-- NAV -->
-<nav class="navbar navbar-expand-lg ae-navbar sticky-top">
-  <div class="container">
-    <a class="navbar-brand d-flex align-items-center gap-2" href="index.php">
+<!-- NAV / HEADER (exactly like index.php) -->
+<header class="ae-header">
+  <div class="container d-flex align-items-center gap-3 py-2">
+    <a class="brand" href="index.php" aria-label="<?= esc(function_exists('site_name') ? site_name($conn) : 'AE Shop') ?>">
       <div class="ae-logo-mark">AE</div>
       <div class="d-none d-md-block">
-        <div style="font-weight:800"><?= esc(site_name($conn)) ?></div>
+        <div style="font-weight:800"><?= esc(function_exists('site_name') ? site_name($conn) : 'AE Shop') ?></div>
         <div style="font-size:12px;color:var(--muted)">Thời trang nam cao cấp</div>
       </div>
     </a>
 
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMain"><span class="navbar-toggler-icon"></span></button>
+    <nav class="nav-center d-none d-lg-flex" role="navigation" aria-label="Main menu">
+      <a class="nav-link" href="index.php">Trang chủ</a>
 
-    <div class="collapse navbar-collapse" id="navMain">
-      <ul class="navbar-nav mx-auto mb-2 mb-lg-0 align-items-center">
-        <li class="nav-item"><a class="nav-link custom <?= is_active('index.php') ?>" href="index.php">Trang chủ</a></li>
-
-        <li class="nav-item dropdown">
-          <a class="nav-link custom dropdown-toggle" href="#" data-bs-toggle="dropdown">Sản phẩm</a>
-          <ul class="dropdown-menu">
-            <?php foreach($cats as $c): ?>
-              <li><a class="dropdown-item" href="category.php?slug=<?= urlencode($c['slug']) ?>"><?= esc($c['ten']) ?></a></li>
-            <?php endforeach; ?>
-            <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item text-muted" href="sanpham.php">Xem tất cả sản phẩm</a></li>
-          </ul>
-        </li>
-
-        <li class="nav-item"><a class="nav-link custom <?= is_active('about.php') ?>" href="about.php">Giới Thiệu</a></li>
-        <li class="nav-item"><a class="nav-link custom <?= is_active('contact.php') ?>" href="contact.php">Liên hệ</a></li>
-
-        <li class="nav-item">
-          <a class="nav-link nav-orders ms-2" href="orders.php"><i class="bi bi-receipt-cutoff"></i><span class="ms-1 d-none d-lg-inline">Đơn hàng của tôi</span></a>
-        </li>
-      </ul>
-
-      <div class="d-flex align-items-center gap-2">
-        <form class="d-none d-lg-flex me-2" method="get" action="sanpham.php"><div class="input-group input-group-sm"><input name="q" class="form-control search-input" placeholder="Tìm sản phẩm, mã..." value="<?= esc($_GET['q'] ?? '') ?>"><button class="btn btn-dark" type="submit"><i class="bi bi-search"></i></button></div></form>
-
-        <div class="dropdown">
-          <a class="d-flex align-items-center text-decoration-none" href="#" data-bs-toggle="dropdown">
-            <div style="width:40px;height:40px;border-radius:8px;background:#f6f8fb;display:flex;align-items:center;justify-content:center;color:var(--accent)"><i class="bi bi-person-fill"></i></div>
-            <span class="ms-2 d-none d-md-inline small"><?= $user_name ? esc($user_name) : 'Tài khoản' ?></span>
-          </a>
-          <ul class="dropdown-menu dropdown-menu-end p-2">
-            <?php if(empty($_SESSION['user'])): ?>
-              <li><a class="dropdown-item" href="login.php">Đăng nhập</a></li>
-              <li><a class="dropdown-item" href="register.php">Tạo tài khoản</a></li>
-            <?php else: ?>
-              <li><a class="dropdown-item" href="account.php">Tài khoản của tôi</a></li>
-              <li><a class="dropdown-item" href="orders.php">Đơn hàng</a></li>
-              <li><hr class="dropdown-divider"></li>
-              <li><a class="dropdown-item text-danger" href="logout.php">Đăng xuất</a></li>
-            <?php endif; ?>
-          </ul>
-        </div>
-
-        <div class="dropdown">
-          <a class="d-flex align-items-center text-decoration-none position-relative" href="#" data-bs-toggle="dropdown">
-            <div style="width:40px;height:40px;border-radius:8px;background:#f6f8fb;display:flex;align-items:center;justify-content:center;color:var(--accent)"><i class="bi bi-bag-fill"></i></div>
-            <span class="ms-2 d-none d-md-inline small">Giỏ hàng</span>
-            <span class="badge bg-danger rounded-pill" style="position:relative;top:-10px;left:-8px"><?= (int)$cart_count ?></span>
-          </a>
-          <div class="dropdown-menu dropdown-menu-end p-3" style="min-width:320px">
-            <?php if (empty($_SESSION['cart'])): ?>
-              <div class="text-muted small">Bạn chưa có sản phẩm nào trong giỏ.</div>
-              <div class="mt-3"><a href="sanpham.php" class="btn btn-primary btn-sm w-100">Mua ngay</a></div>
-            <?php else: ?>
-              <div style="max-height:240px;overflow:auto">
-                <?php $total=0; foreach($_SESSION['cart'] as $id=>$item):
-                  $qty = isset($item['qty']) ? (int)$item['qty'] : (isset($item['sl']) ? (int)$item['sl'] : 1);
-                  $price = isset($item['price']) ? (float)$item['price'] : (isset($item['gia']) ? (float)$item['gia'] : 0);
-                  $name = $item['name'] ?? $item['ten'] ?? '';
-                  $img = $item['img'] ?? $item['hinh'] ?? 'images/placeholder.jpg';
-                  $img = preg_match('#^https?://#i', $img) ? $img : ltrim($img, '/');
-                  $subtotal = $qty * $price; $total += $subtotal;
-                ?>
-                  <div class="d-flex gap-2 align-items-center py-2">
-                    <img src="<?= esc($img) ?>" style="width:56px;height:56px;object-fit:cover;border-radius:8px" alt="<?= esc($name) ?>">
-                    <div class="flex-grow-1"><div class="small fw-semibold mb-1"><?= esc($name) ?></div><div class="small text-muted"><?= $qty ?> x <?= number_format($price,0,',','.') ?> ₫</div></div>
-                    <div class="small"><?= number_format($subtotal,0,',','.') ?> ₫</div>
-                  </div>
-                <?php endforeach; ?>
-              </div>
-              <div class="d-flex justify-content-between align-items-center mt-3"><div class="text-muted small">Tạm tính</div><div class="fw-semibold"><?= number_format($total,0,',','.') ?> ₫</div></div>
-              <div class="mt-3 d-grid gap-2"><a href="cart.php" class="btn btn-outline-secondary btn-sm">Giỏ hàng</a><a href="checkout.php" class="btn btn-primary btn-sm">Thanh toán</a></div>
-            <?php endif; ?>
-          </div>
-        </div>
-
-        <button class="btn btn-light d-lg-none ms-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileMenu" aria-controls="mobileMenu">
-          <i class="bi bi-list"></i>
-        </button>
+      <div class="nav-item dropdown">
+        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown" aria-expanded="false">Sản Phẩm</a>
+        <ul class="dropdown-menu p-2">
+          <?php if (!empty($catsMenu)): foreach($catsMenu as $c): ?>
+            <li><a class="dropdown-item" href="category.php?slug=<?= urlencode($c['slug']) ?>"><?= esc($c['ten']) ?></a></li>
+          <?php endforeach; else: ?>
+            <li><span class="dropdown-item text-muted">Chưa có danh mục</span></li>
+          <?php endif; ?>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item text-muted" href="sanpham.php">Xem tất cả sản phẩm</a></li>
+        </ul>
       </div>
+      <a class="nav-link" href="about.php">Giới thiệu</a>
+      <a class="nav-link" href="contact.php">Liên hệ</a>
+    </nav>
+
+    <div class="ms-auto d-flex align-items-center gap-2">
+      <form class="d-none d-lg-flex" action="sanpham.php" method="get" role="search">
+        <div class="input-group input-group-sm shadow-sm" style="border-radius:10px; overflow:hidden;">
+          <input name="q" class="form-control form-control-sm search-input" placeholder="Tìm sản phẩm, mã..." value="<?= esc($_GET['q'] ?? '') ?>">
+          <button class="btn btn-dark btn-sm" type="submit"><i class="bi bi-search"></i></button>
+        </div>
+      </form>
+
+      <div class="dropdown">
+        <a class="text-decoration-none d-flex align-items-center" href="#" data-bs-toggle="dropdown" aria-expanded="false">
+          <div style="width:40px;height:40px;border-radius:8px;background:#f6f8fb;display:flex;align-items:center;justify-content:center;color:#0b1220"><i class="bi bi-person-fill"></i></div>
+        </a>
+        <ul class="dropdown-menu dropdown-menu-end p-2">
+          <?php if(empty($_SESSION['user'])): ?>
+            <li><a class="dropdown-item" href="login.php">Đăng nhập</a></li>
+            <li><a class="dropdown-item" href="register.php">Tạo tài khoản</a></li>
+          <?php else: ?>
+            <li><a class="dropdown-item" href="account.php">Tài khoản</a></li>
+            <li><a class="dropdown-item" href="orders.php">Đơn hàng</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item text-danger" href="logout.php">Đăng xuất</a></li>
+          <?php endif; ?>
+        </ul>
+      </div>
+
+      <div class="dropdown">
+        <a class="text-decoration-none position-relative d-flex align-items-center" href="#" id="miniCartBtn" data-bs-toggle="dropdown" aria-expanded="false">
+          <div style="width:40px;height:40px;border-radius:8px;background:#f6f8fb;display:flex;align-items:center;justify-content:center;color:#0b1220"><i class="bi bi-bag-fill"></i></div>
+          <span class="ms-2 d-none d-md-inline small">Giỏ hàng</span>
+          <span class="badge bg-danger rounded-pill" style="position:relative;top:-10px;left:-8px"><?= (int)$cart_count ?></span>
+        </a>
+        <div class="dropdown-menu dropdown-menu-end p-3" aria-labelledby="miniCartBtn" style="min-width:320px;">
+          <?php if (empty($_SESSION['cart'])): ?>
+            <div class="small text-muted">Bạn chưa có sản phẩm nào trong giỏ.</div>
+            <div class="mt-3 d-grid gap-2">
+              <a href="sanpham.php" class="btn btn-primary btn-sm">Mua ngay</a>
+            </div>
+          <?php else: ?>
+            <div style="max-height:240px;overflow:auto">
+              <?php $total=0; foreach($_SESSION['cart'] as $id=>$item):
+                $qty = isset($item['qty']) ? (int)$item['qty'] : (isset($item['sl']) ? (int)$item['sl'] : 1);
+                $price = isset($item['price']) ? (float)$item['price'] : (isset($item['gia']) ? (float)$item['gia'] : 0);
+                $name = $item['name'] ?? $item['ten'] ?? '';
+                $img = $item['img'] ?? $item['hinh'] ?? 'images/placeholder.jpg';
+                $img = preg_match('#^https?://#i', $img) ? $img : ltrim($img, '/');
+                $subtotal = $qty * $price; $total += $subtotal;
+              ?>
+                <div class="d-flex gap-2 align-items-center py-2">
+                  <img src="<?= esc($img) ?>" style="width:56px;height:56px;object-fit:cover;border-radius:8px" alt="<?= esc($name) ?>">
+                  <div class="flex-grow-1"><div class="small fw-semibold mb-1"><?= esc($name) ?></div><div class="small text-muted"><?= $qty ?> x <?= number_format($price,0,',','.') ?> ₫</div></div>
+                  <div class="small"><?= number_format($subtotal,0,',','.') ?> ₫</div>
+                </div>
+              <?php endforeach; ?>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-3"><div class="text-muted small">Tạm tính</div><div class="fw-semibold"><?= number_format($total,0,',','.') ?> ₫</div></div>
+            <div class="mt-3 d-grid gap-2"><a href="cart.php" class="btn btn-outline-secondary btn-sm">Giỏ hàng</a><a href="checkout.php" class="btn btn-primary btn-sm">Thanh toán</a></div>
+          <?php endif; ?>
+        </div>
+      </div>
+
+      <button class="btn btn-light d-lg-none ms-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileMenu" aria-controls="mobileMenu">
+        <i class="bi bi-list"></i>
+      </button>
     </div>
   </div>
-</nav>
+</header>
 
 <!-- Mobile offcanvas -->
 <div class="offcanvas offcanvas-start" tabindex="-1" id="mobileMenu" aria-labelledby="mobileMenuLabel">
   <div class="offcanvas-header">
-    <h5 id="mobileMenuLabel"><?= esc(site_name($conn)) ?></h5>
+    <h5 id="mobileMenuLabel"><?= esc(function_exists('site_name') ? site_name($conn) : 'AE Shop') ?></h5>
     <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Đóng"></button>
   </div>
   <div class="offcanvas-body">
@@ -232,13 +235,11 @@ function is_active($file) { return basename($_SERVER['PHP_SELF']) === $file ? 'a
     <ul class="list-unstyled">
       <li class="mb-2"><a href="index.php" class="text-decoration-none">Trang chủ</a></li>
       <li class="mb-2"><a href="sanpham.php" class="text-decoration-none">Sản phẩm</a></li>
-      <?php foreach($cats as $c): ?>
+      <?php foreach($catsMenu as $c): ?>
         <li class="mb-2 ps-2"><a href="category.php?slug=<?= urlencode($c['slug']) ?>" class="text-decoration-none"><?= esc($c['ten']) ?></a></li>
       <?php endforeach; ?>
-      <li class="mb-2"><a href="sale.php" class="text-decoration-none">Khuyến mãi</a></li>
       <li class="mb-2"><a href="about.php" class="text-decoration-none">Giới thiệu</a></li>
       <li class="mb-2"><a href="contact.php" class="text-decoration-none">Liên hệ</a></li>
-      <li class="mb-2"><a href="orders.php" class="text-decoration-none">Đơn hàng của tôi</a></li>
     </ul>
   </div>
 </div>
@@ -246,7 +247,7 @@ function is_active($file) { return basename($_SERVER['PHP_SELF']) === $file ? 'a
 <!-- HERO -->
 <section class="hero">
   <div class="container">
-    <h1 class="fw-bold">Liên hệ với <?= esc(site_name($conn)) ?></h1>
+    <h1 class="fw-bold">Liên hệ với <?= esc(function_exists('site_name') ? site_name($conn) : 'AE Shop') ?></h1>
     <p class="text-muted">Gửi yêu cầu, góp ý hoặc thắc mắc — chúng tôi sẽ trả lời sớm nhất.</p>
   </div>
 </section>
@@ -302,7 +303,7 @@ function is_active($file) { return basename($_SERVER['PHP_SELF']) === $file ? 'a
     <aside class="contact-right">
       <h5 class="mb-3">Thông tin liên hệ</h5>
       <div class="mb-3">
-        <div class="fw-semibold"><?= esc(site_name($conn)) ?></div>
+        <div class="fw-semibold"><?= esc(function_exists('site_name') ? site_name($conn) : 'AE Shop') ?></div>
         <div class="text-muted">Địa chỉ: 123 Đường ABC, Quận XYZ</div>
         <div class="text-muted">Hotline: <a href="tel:0123456789">0123 456 789</a></div>
         <div class="text-muted">Email: <a href="mailto:info@example.com">info@example.com</a></div>
@@ -398,7 +399,7 @@ function is_active($file) { return basename($_SERVER['PHP_SELF']) === $file ? 'a
 
 <!-- FOOTER -->
 <footer class="bg-dark text-white py-4 mt-4">
-  <div class="container text-center"><small><?= esc(site_name($conn)) ?> — © <?= date('Y') ?> — Hotline: 0123 456 789</small></div>
+  <div class="container text-center"><small><?= esc(function_exists('site_name') ? site_name($conn) : 'AE Shop') ?> — © <?= date('Y') ?> — Hotline: 0123 456 789</small></div>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
